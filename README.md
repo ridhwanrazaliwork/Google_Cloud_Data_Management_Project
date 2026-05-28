@@ -344,7 +344,7 @@ Load the cleaned Silver data into BigQuery tables, then connect Looker Studio to
 
 ---
 
-## Project Contribution Matrix
+## Project Contribution Matrix (Might be like this)
 To simplify evaluation, roles are divided evenly among team members:
 
 - **Group Leader:** Infrastructure coordination, Dataproc cluster setup, and documentation assembly.
