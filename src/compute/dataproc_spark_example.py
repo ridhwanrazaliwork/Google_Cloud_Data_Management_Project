@@ -1,6 +1,5 @@
 import time
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, count, avg
 
 # Re-initialize the session with an explicitly safe warehouse location path
 spark = SparkSession.builder \
@@ -11,11 +10,12 @@ spark = SparkSession.builder \
 
 print("Spark Session successfully bound to write-permissive warehouse directory.")
 
-
+import time
+from pyspark.sql.functions import col, count, avg
 
 start_spark = time.time()
 
-BRONZE_DATA_PATH = "gs://kaggle_bronze_bucket/tripadvisor_raw/bronze_tripadvisor.csv"
+BRONZE_DATA_PATH = "gs://kaggle_silver_bucket/tripadvisor_cleaned/silver_tripadvisor.csv"
 
 # 1. Read Raw Dataset
 spark_df = spark.read.csv(BRONZE_DATA_PATH, header=True, inferSchema=True)
@@ -31,7 +31,7 @@ spark_metrics.show(5)
 
 # 3. Export Out to Medallion Gold Layer in Cloud Storage (GCS)
 # This saves the metrics output as clean distributed parquet files
-spark_metrics.write.mode("overwrite").parquet("gs://kaggle_silver_bucket/gold_spark_metrics/")
+spark_metrics.write.mode("overwrite").parquet("gs://kaggle_gold_bucket/gold_spark_metrics/")
 
 # 4. Export Out directly into BigQuery Warehouse
 # Dataproc clusters have a built-in BigQuery connector configuration

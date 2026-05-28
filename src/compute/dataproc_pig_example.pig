@@ -1,5 +1,5 @@
 -- 1. Load the raw data from the newly isolated GCS folder
-raw_data = LOAD 'gs://kaggle_bronze_bucket/tripadvisor_raw/' USING PigStorage(',') 
+raw_data = LOAD 'gs://kaggle_silver_bucket/tripadvisor_cleaned/silver_tripadvisor.csv' USING PigStorage(',') 
     AS (
         name:chararray, 
         street_address:chararray, 

@@ -2,8 +2,9 @@
 SET hive.exec.scratchdir=/tmp/hive/scratch;
 SET hive.metastore.warehouse.dir=/tmp/hive/warehouse;
 SET hive.query.results.cache.enabled=false;
-SET tez.am.resource.memory.mb=2048;
-SET hive.tez.container.size=2048;
+SET tez.am.resource.memory.mb=512;
+SET hive.tez.container.size=512;
+SET hive.exec.reducers.bytes.per.reducer=268435456;
 
 CREATE DATABASE IF NOT EXISTS ta_final_db;
 USE ta_final_db;
@@ -16,7 +17,9 @@ CREATE EXTERNAL TABLE tripadvisor_clean_table (
     trip_advisor_url STRING, menu STRING, price_range STRING
 ) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
 STORED AS TEXTFILE
-LOCATION 'gs://kaggle_bronze_bucket/tripadvisor_raw/';
+LOCATION 'gs://kaggle_silver_bucket/tripadvisor_cleaned/';
+
+-- Location of the file must be in folder format, dont point it to the csv file.
 
 SELECT location, type, price_range, COUNT(name) as total_restaurants
 FROM tripadvisor_clean_table
