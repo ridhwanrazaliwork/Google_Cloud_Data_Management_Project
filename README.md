@@ -180,6 +180,23 @@ Open Cloud Dataprep (now Alteryx Trifacta) via the web console, load the raw fil
 
 ### Phase 3: Distributed Compute Benchmarking
 
+#### Example that we can do (not tested in the code)
+
+- Daily Booking Patterns: "How many restaurants receive bookings daily?" (Group by restaurant, count distinct booking dates)
+- Most Popular Hotels/Restaurants: "Top 10 restaurants by review count and average rating"
+- Price Range Distribution: "What percentage of restaurants fall in each price range by location?"
+- Geographic Hotspots: "Which locations have the highest concentration of highly-rated restaurants?"
+- Rating vs. Popularity: "Correlation between review count and average rating"
+
+
+#### Example benchmark
+- Query-Level Comparisons:
+- Execution Time: How long did each tool (PySpark, Hive, Pig) take to run the aggregation query?
+- Memory Usage: Peak RAM consumed during processing
+
+
+### Steps
+
 Create a Dataproc cluster (via UI will be created by admin):
 **1. Basic Setup**
 Go to the Dataproc section in the Google Cloud Console.
