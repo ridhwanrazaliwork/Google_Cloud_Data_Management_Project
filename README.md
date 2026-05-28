@@ -4,7 +4,17 @@
 
 ## Project Overview & Domain
 - **Domain:** Tourism and hospitality
-- **Dataset:** To be filled
+- **Dataset:** To be filled (In this example i use random tripadvisor dataset on kaggle)
+
+- **Project option:** build a complete big data solution using different tools with a number of problem statements + comparison results of different Apache technologies
+
+Example Problem Statements:
+1. Data Ingestion and Quality (Bronze & Silver Layers) 
+- How can we efficiently ingest raw Tripadvisor data from Kaggle and ensure data quality using parallel engineering paths (Cloud DataPrep and PySpark)?
+2. Technology Performance Comparison (Gold Layer) 
+- Which distributed processing tool—PySpark, Apache Hive, or Apache Pig—delivers the best computational performance when processing the dataset?
+3. Business Intelligence and Insights (Downstream Consumption) 
+- What key drivers of customer satisfaction can be discovered from the dataset and visualized through interactive Looker Studio dashboards?
 
 ```mermaid
 flowchart TB
