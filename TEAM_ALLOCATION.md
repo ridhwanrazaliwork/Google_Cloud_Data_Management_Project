@@ -1,21 +1,22 @@
 # Team Task Allocation - 8 People (Minimal Dependencies)
 
-## Dependency Map Analysis
+## Dependency Map Analysis - UPDATED
 ```
 Person 1 (Intro) → [INDEPENDENT]
 Person 2 (Architecture) → [INDEPENDENT]
 Person 3 (IAM + Ingestion) → Produces: Bronze CSV in GCS
 Person 4 (Data Cleaning) → Depends on: Person 3 ✓ (clear input/output)
-Person 5 (Apache Tools) → Depends on: Person 4 ✓ (clear input: Silver CSV)
-Person 6 (Dashboard) → Depends on: Person 5 ✓ (clear input: Gold results in BigQuery)
-Person 7 (Results Analysis) → Depends on: Person 5 ✓ (uses Person 5 output)
+Person 5 (Apache Tools) → Depends on: Person 4 ✓ (benchmarking ONLY, NO writes)
+Person 6 (Dashboard) → [INDEPENDENT FROM PERSON 5] ✓ reads Silver bucket directly
+Person 7 (Results Analysis) → Depends on: Person 5 ✓ (uses benchmark metrics)
 Person 8 (Conclusion) → Depends on: All completed ✓ (synthesis only)
 ```
 
-**Key Advantage:** Linear dependency chain, not parallel or circular
-- If Person 3 delays → Only Person 4 waits
-- If Person 4 delays → Only Person 5 waits
-- Other people can work independently
+**KEY CHANGE:** 
+- ✅ Person 5 NO LONGER writes to BigQuery or GCS Gold bucket
+- ✅ Person 5 only benchmarks, records metrics, saves terminal logs locally
+- ✅ Person 6 reads Silver CSV directly (can use GCS or load to BigQuery independently)
+- ✅ **Person 6 & Person 5 are NOW INDEPENDENT** - if Person 5 delays, Person 6 is NOT affected
 
 ---
 
@@ -77,36 +78,16 @@ Page 2-2.5: Problem Statements
 Page 3: Framework Design & Medallion Architecture
   - Bronze layer (raw data)
   - Silver layer (cleaned data)
-  - Gold layer (curated/aggregated data)
+  - Gold layer (curated/aggregated data - handled by dashboard)
   - Visual diagram
 
 Page 3.5-4: GCP Service Stack
   - Cloud Run (ingestion)
   - Cloud Storage (landing zones)
-  - Dataproc (compute)
-  - BigQuery (warehouse)
+  - Dataproc (compute - no direct writes to gold)
+  - BigQuery (warehouse - optional, for dashboard)
   - Looker Studio (BI)
   - Diagram showing all services
-
-Expected flow that we might have:
-
-1. **Ingestion (Bronze Layer)**  
-   - Kaggle API → Cloud Run (Flask app) → Raw CSV stored in `gs://kaggle_bronze/`
-
-2. **Quality Engineering (Silver Layer)**  
-   - Clean using either:  
-     - Cloud DataPrep (no‑code, deduplication, null removal) **or**  
-     - PySpark + Great Expectations (programmatic) in dataproc **or** Bigquery
-  
-   - Output to `gs://kaggle_silver/`
-
-3. **Metric Engineering (Gold Layer)**  
-   - Dataproc cluster (e2-highmem-4) processes silver data via PySpark, Hive, or Pig  
-   - Curated results written to BigQuery (`restaurant_gold_db`)
-
-4. **Consumption**  
-   - Looker Studio dashboard connected directly to BigQuery
-
 ```
 
 #### Presentation (1 min)
@@ -120,7 +101,7 @@ Expected flow that we might have:
 ---
 
 ### **PERSON 3 (RIDHWAN) - IAM, Access Management & Ingestion**
-**Workload:** 🔴 ** HEAVY**
+**Workload:** 🔴 **VERY HEAVY** (~40-50 hours)
 **Independence:** ✅ **INDEPENDENT** (first in data pipeline chain)
 **Output:** `gs://kaggle_bronze_bucket/bronze_tripadvisor.csv`
 
@@ -135,7 +116,6 @@ for ROLE in storage.admin secretmanager.secretAccessor dataproc.editor metastore
     --role="roles/${ROLE}"; \
 done
 ```
-
 
 **2. Secret Manager Setup**
 - Store `kaggle.json` in Secret Manager
@@ -155,13 +135,13 @@ done
 Page 5: IAM & Access Management
   - Service account creation
   - Role-based access control (RBAC)
-  - Roles assigned (storage.admin, secretmanager, dataproc.editor, bigquery.admin)
+  - Roles assigned
   - Team member access credentials
   - Security best practices
 
 Page 5.5-6: Data Ingestion Pipeline
   - Cloud Run Flask app architecture
-  - Secret Manager integration (Kaggle credentials)
+  - Secret Manager integration
   - Kaggle API authentication flow
   - GCS Bronze bucket output
   - Sample output: Row count, column count
@@ -174,15 +154,6 @@ Page 5.5-6: Data Ingestion Pipeline
 - "Kaggle → Cloud Run → GCS Bronze (automated)"
 - Show output: X rows, Y columns in Bronze bucket
 
-#### Deliverables:
-```
-src/ingestion/
-├── ingestion_cloudrun.py          [Flask app]
-├── requirements.txt               [Dependencies]
-
-Output: gs://kaggle_bronze_bucket/bronze_tripadvisor.csv
-```
-
 #### Can start: **Immediately** ✅
 #### Blocks: **Person 4 (Data Cleaning)** ⏳
 
@@ -191,8 +162,8 @@ Output: gs://kaggle_bronze_bucket/bronze_tripadvisor.csv
 ### **PERSON 4 - Data Cleaning (Cloud Dataprep)**
 **Workload:** 🟡 **MEDIUM** (~15-20 hours)
 **Independence:** ❌ **DEPENDS ON PERSON 3** (Bronze CSV)
-**Input:** `gs://kaggle_bronze_bucket/raw/raw_bronze.csv`
-**Output:** `gs://kaggle_silver_bucket/clean/clean_silver.csv`
+**Input:** `gs://kaggle_bronze_bucket/bronze_tripadvisor.csv`
+**Output:** `gs://kaggle_silver_bucket/tripadvisor_clean.csv`
 
 #### Technical Responsibilities:
 
@@ -204,102 +175,50 @@ Output: gs://kaggle_bronze_bucket/bronze_tripadvisor.csv
 **2. Create Data Quality Recipes** (8-12 hours)
 ```
 Recipe 1: Deduplication
-├── Remove duplicate rows
-└── Document: X rows removed
-
 Recipe 2: Null Handling
-├── Remove rows with NULL in key columns (location, type)
-├── Fill NULL in optional columns with "Unknown"
-└── Document: Y rows removed, Z nulls replaced
-
 Recipe 3: Type Casting
-├── Ensure numeric columns (rating, review_count) are float/int
-├── Ensure text columns (location, type) are string
-├── Standardize price_range to uppercase
-└── Document: Type conversion rules applied
-
 Recipe 4: Structural Cleaning
-├── Remove leading/trailing whitespace
-├── Standardize location names (consistent casing)
-├── Remove special characters if needed
-└── Document: Cleaning steps applied
 ```
 
 **3. Execute Recipes & Validate Output** (3-5 hours)
 - Run Dataprep recipes to completion
-- Output to GCS Silver bucket: `gs://kaggle_silver_bucket/clean/clean_silver.csv`
+- Output to GCS Silver bucket
 - Generate data quality report
 - Record before/after metrics
 
 #### Report (~1.5 pages)
 ```
 Page 7: Data Cleaning & Quality Engineering
-  - Raw data challenges (duplicates, nulls, inconsistencies)
-  - Cloud Dataprep recipe overview (visual diagrams)
-  
-  Recipe Details:
-  1. Deduplication
-     - Found X duplicate rows
-     - Removed X rows (Y% of dataset)
-  
-  2. Null Handling
-     - Location: A% missing → 0% after cleaning
-     - Type: B% missing → 0% after cleaning
-     - Optional columns: C% missing → D% after imputation
-  
-  3. Type Casting
-     - Rating: converted to FLOAT
-     - Review count: converted to INT
-     - Price range: standardized to uppercase
-  
+  - Raw data challenges
+  - Dataprep recipe overview
   - Before/After Comparison Table
-    | Metric | Before | After | Change |
-    | Total Rows | X | Y | -Z rows (-W%) |
-    | Null Columns | A% | B% | -C% |
-    | Duplicates | D rows | 0 | -D rows |
-  
-  - Sample clean data (5 rows showing structure)
-  - Output location: `gs://kaggle_silver_bucket/clean/clean_silver.csv`
+  - Sample clean data
+  - Output location: gs://kaggle_silver_bucket/tripadvisor_clean.csv
 ```
 
 #### Presentation (1 min)
 - Show Dataprep UI screenshot
 - "Raw data: X% duplicates, Y% nulls"
-- "After cleaning: 0% duplicates, Z% nulls"
+- "After cleaning: Z% improvement"
 - Before/after bar chart
-- "Ready for compute engines"
-
-#### Deliverables:
-```
-dataprep/
-├── dataprep_recipe.json           [Exported recipe]
-├── before_profile.csv             [Data quality before]
-├── after_profile.csv              [Data quality after]
-└── quality_report.md              [Summary metrics]
-
-Output: gs://kaggle_silver_bucket/tripadvisor_clean.csv
-```
 
 #### Can start: **After Person 3 completes ingestion** ⏳
-#### Blocks: **Person 5 (Apache Tools)** ⏳
+#### Blocks: **Person 5 + Person 6** ⏳
 
 ---
 
-### **PERSON 5 - Apache Tools Comparison (Spark, Hive, Pig)**
-**Workload:** 🔴 **VERY HEAVY**
+### **PERSON 5 - Apache Tools Benchmarking (Spark, Hive, Pig) - BENCHMARKING ONLY**
+**Workload:** 🔴 **VERY HEAVY** (~40-50 hours)
 **Independence:** ❌ **DEPENDS ON PERSON 4** (Silver CSV)
-**Input:** `gs://kaggle_silver_bucket/clean/clean_silver.csv`
+**Input:** `gs://kaggle_silver_bucket/tripadvisor_clean.csv`
+**Output:** Benchmark metrics, execution times, terminal logs (LOCAL FILES ONLY)
 
-# We use Only the best/fastest tools for writing the output to GCS, Bigquery
-**Output:** 
-- `gs://kaggle_gold_bucket/spark_results/`
-- `gs://kaggle_gold_bucket/hive_results/`
-- `gs://kaggle_gold_bucket/pig_results/`
-- Performance metrics (execution times)
+**CRITICAL CHANGE:** Person 5 does NOT write results to BigQuery or GCS Gold bucket.
+Only record metrics and save terminal output logs locally.
 
 #### Technical Responsibilities:
 
-**1. PySpark Implementation** (Sample code, which u can find in the repo as well)
+**1. PySpark Implementation** (12-15 hours)
 ```python
 # src/compute/dataproc_spark.py
 import time
@@ -312,17 +231,11 @@ spark = SparkSession.builder \
     .enableHiveSupport() \
     .getOrCreate()
 
-print("=" * 60)
-print("APACHE SPARK BENCHMARK")
-print("=" * 60)
-
 start_spark = time.time()
 
 # Load Silver data
 df = spark.read.csv("gs://kaggle_silver_bucket/tripadvisor_clean.csv", 
                     header=True, inferSchema=True)
-
-print(f"Loaded {df.count()} rows")
 
 # Execute benchmark query
 result = df.filter(col("location").isNotNull()) \
@@ -333,14 +246,8 @@ result = df.filter(col("location").isNotNull()) \
 
 result.show()
 
-# Write to Gold layer (GCS)
-result.write.mode("overwrite").parquet("gs://kaggle_gold_bucket/spark_results/")
-
-# Write to BigQuery
-result.write.format("bigquery") \
-      .option("table", "restaurant_gold_db.spark_benchmark_results") \
-      .mode("overwrite") \
-      .save()
+# ONLY save locally for logging
+result.coalesce(1).write.mode("overwrite").csv("/tmp/spark_output")
 
 end_spark = time.time()
 spark_time = end_spark - start_spark
@@ -352,17 +259,10 @@ print("=" * 60)
 spark.stop()
 ```
 
-**2. HiveQL Implementation** (Sample code, which u can find in the repo as well)
+**2. HiveQL Implementation** (12-15 hours)
 ```sql
 -- src/compute/dataproc_hive.hql
-CREATE EXTERNAL TABLE tripadvisor_clean_table (
-    name STRING,
-    location STRING,
-    type STRING,
-    price_range STRING,
-    rating FLOAT,
-    review_count INT
-)
+CREATE EXTERNAL TABLE tripadvisor_clean_table (...)
 ROW FORMAT DELIMITED
 FIELDS TERMINATED BY ','
 LOCATION 'gs://kaggle_silver_bucket/tripadvisor_clean/';
@@ -375,102 +275,62 @@ ORDER BY total_restaurants DESC
 LIMIT 5;
 ```
 
-**3. Pig Latin Implementation** (Sample code, which u can find in the repo as well)
+**3. Pig Latin Implementation** (12-15 hours)
 ```pig
 -- src/compute/dataproc_pig.pig
-tripadvisor = LOAD 'gs://kaggle_silver_bucket/tripadvisor_clean.csv' 
-              USING PigStorage(',') AS 
-              (name, location, type, price_range, rating, review_count);
-
-filtered = FILTER tripadvisor BY location IS NOT NULL AND location != 'location';
-
-grouped = GROUP filtered BY (location, type, price_range);
-
-counted = FOREACH grouped GENERATE 
-          group.location as location,
-          group.type as type,
-          group.price_range as price_range,
-          COUNT(filtered) as total_restaurants;
-
-sorted = ORDER counted BY total_restaurants DESC;
-
-limited = LIMIT sorted 5;
-
-STORE limited INTO 'gs://kaggle_gold_bucket/pig_results/';
+tripadvisor = LOAD 'gs://kaggle_silver_bucket/tripadvisor_clean.csv' ...
+filtered = FILTER tripadvisor BY location IS NOT NULL ...
+grouped = GROUP filtered BY (location, type, price_range) ...
+counted = FOREACH grouped GENERATE ...
+sorted = ORDER counted BY total_restaurants DESC ...
+STORE limited INTO '/tmp/pig_output';
 ```
 
-**4. Execution & Timing**
-- Run each tool 1 or 2 times on Dataproc cluster
-- Record execution times for each run
-- Use `time` command to capture wall-clock time:
-  ```bash
-  # For Spark
-  start_time=$(date +%s)
-  spark-submit dataproc_spark.py
-  end_time=$(date +%s)
-  echo "Spark Runtime: $((end_time - start_time)) seconds"
-  
-  # For Hive
-  start_time=$(date +%s)
-  hive -f dataproc_hive.hql
-  end_time=$(date +%s)
-  echo "Hive Runtime: $((end_time - start_time)) seconds"
-  
-  # For Pig
-  start_time=$(date +%s)
-  pig -useHCatalog dataproc_pig.pig
-  end_time=$(date +%s)
-  echo "Pig Runtime: $((end_time - start_time)) seconds"
-  ```
+**4. Execution, Timing & Logging** (8-10 hours)
+- Run each tool 2-3 times on Dataproc cluster
+- Record execution times
+- Use `time` command:
+```bash
+start_time=$(date +%s)
+spark-submit dataproc_spark.py > /tmp/spark_run1.log 2>&1
+end_time=$(date +%s)
+echo "Runtime: $((end_time - start_time)) seconds" >> /tmp/spark_run1.log
+```
 - Screenshot output logs
+- Save ALL logs locally (not to BigQuery/GCS)
 
 #### Report (~1.5-2 pages)
 ```
 Page 8: Apache Tools Implementation
 
 1. PySpark Implementation
-   - Code architecture & optimization strategy
-   - DAG evaluation model explanation
-   - Execution time (3 runs):
-     * Run 1: X.XX seconds
-     * Run 2: X.YY seconds
-     * Average: X.XX seconds
-   - Sample output (5 rows) or image of the output
-   - GitHub link: src/compute/dataproc_spark.py
+   - Code architecture
+   - DAG evaluation model
+   - Execution times (3 runs): X.XX, X.YY, X.ZZ seconds
+   - Sample output
+   - GitHub link
 
 2. HiveQL Implementation
    - External table definition
    - Query structure
-   - Execution time (3 runs):
-     * Run 1: A.AA seconds
-     * Run 2: A.BB seconds
-     * Average: A.AA seconds
-   - Sample output (5 rows) or image of the output
-   - GitHub link: src/compute/dataproc_hive.hql
+   - Execution times: A.AA, A.BB, A.CC seconds
+   - Sample output
 
 3. Pig Latin Implementation
    - Dataflow script structure
-   - MapReduce compilation steps
-   - Execution time (3 runs):
-     * Run 1: P.PP seconds
-     * Run 2: P.QQ seconds
-     * Average: P.PP seconds
-   - Sample output (5 rows) or image of the output
-   - GitHub link: src/compute/dataproc_pig.pig
+   - Execution times: P.PP, P.QQ, P.RR seconds
+   - Sample output
 
 Page 9: Raw Benchmark Results
    - Execution time summary table
-   - Query output validation (all three produce same results)
-   - Terminal screenshots with timestamps
-   - Any anomalies or exceptions documented
+   - Query output validation
+   - Terminal screenshots
 ```
-
-# NOTE: Can also use information from Yarn
 
 #### Presentation (1.5 min)
 - Show 3 code snippets (30 sec each)
 - "Identical query, 3 different tools"
-- Raw execution times (results analysis by Person 7)
+- Raw execution times (analysis by Person 7)
 
 #### Deliverables:
 ```
@@ -479,7 +339,7 @@ src/compute/
 ├── dataproc_hive.hql              [HiveQL script]
 ├── dataproc_pig.pig               [Pig Latin script]
 └── benchmark_logs/
-    ├── spark_run1.log             [Execution log + time] if have
+    ├── spark_run1.log             [Local file]
     ├── spark_run2.log
     ├── spark_run3.log
     ├── hive_run1.log
@@ -489,135 +349,129 @@ src/compute/
     ├── pig_run2.log
     └── pig_run3.log
 
-Output (only one of the output below, the best tool):
-├── gs://kaggle_gold_bucket/spark_results/
-├── gs://kaggle_gold_bucket/hive_results/
-└── gs://kaggle_gold_bucket/pig_results/
-
-BigQuery Tables (only one of the output below, the best tool):
-├── restaurant_gold_db.spark_benchmark_results
-├── restaurant_gold_db.hive_benchmark_results
-└── restaurant_gold_db.pig_benchmark_results
+NO BigQuery writes
+NO GCS Gold bucket writes
+ONLY local benchmark logs
 ```
 
 #### Can start: **After Person 4 completes cleaning** ⏳
-#### Blocks: **Person 6 (Dashboard) + Person 7 (Results Analysis)** ⏳
+#### Blocks: **Person 7 (Results Analysis) ONLY** ⏳
+#### Does NOT block: **Person 6 (Dashboard)** ✅
 
 ---
 
-### **PERSON 6 - Dashboard & Business Intelligence**
+### **PERSON 6 - Dashboard & Business Intelligence - NO DEPENDENCY ON PERSON 5**
 **Workload:** 🟡 **MEDIUM-HEAVY** (~18-22 hours)
-**Independence:** ❌ **DEPENDS ON PERSON 5** (Gold results in BigQuery)
-**Input:** BigQuery tables from Person 5
+**Independence:** ❌ **DEPENDS ONLY ON PERSON 4** (Silver CSV)
+**Input:** `gs://kaggle_silver_bucket/tripadvisor_clean.csv` (reads directly)
 **Output:** Looker Studio dashboard
+
+**KEY ADVANTAGE:** Person 6 is COMPLETELY INDEPENDENT from Person 5
+- Reads Silver bucket directly (already cleaned by Person 4)
+- Can load to BigQuery independently if desired
+- If Person 5 is delayed, Person 6 is NOT affected ✅
 
 #### Technical Responsibilities:
 
-**1. BigQuery Table Preparation** (5-8 hours)
+**Option A (Recommended - Simplest): Connect Looker Studio Directly to GCS**
+- Create Looker Studio data source → GCS Silver CSV
+- Build visualizations directly from CSV
+- Fastest setup, no intermediate BigQuery needed
+
+**Option B (If preferred): Load Silver to BigQuery First**
 - Create BigQuery dataset: `restaurant_gold_db`
-- Create tables from Spark/Hive/Pig results
-- Define schemas for optimal querying
-- Ensure all three tool results loaded successfully
+- Load Silver CSV to BigQuery table
+- Connect Looker Studio to BigQuery
+- More scalable, better for real-time queries
 
-**2. Looker Studio Dashboard Creation**
+**Either way:** This is Person 6's choice, independent of Person 5
 
-A simple dashboard is sufficient
-
-#### Example ideas:
+#### Dashboard Creation (10-14 hours)
 
 **Dashboard 1: Restaurant Analytics**
-- Top 10 restaurants by location & price range (table + bar chart)
+- Top 10 restaurants by location & price range
 - Rating distribution (histogram)
-- Review count distribution (box plot)
+- Review count distribution
 - Geographic heatmap (if lat/long available)
 
 **Dashboard 2: Booking Patterns**
-- Daily booking volume by location (line chart)
+- Daily booking volume by location
 - Price range distribution (pie chart)
-- Cuisine type popularity (horizontal bar)
-- Most popular restaurants (top 20 table)
-
-**Dashboard 3: Benchmark Results** (optional, if space)
-- Tool performance comparison (shared by Person 7 analysis)
+- Cuisine type popularity
+- Most popular restaurants (top 20)
 
 #### Report (~1.5-2 pages)
 ```
 Page 10: Business Intelligence Dashboards
 
 Dashboard 1: Restaurant Analytics
-  - Screenshot of dashboard
-  - Top 3 findings:
-    * Finding 1: [specific number from chart]
-    * Finding 2: [specific trend]
-    * Finding 3: [geographic insight]
-  
-Dashboard 2: Booking Patterns
-  - Screenshot of dashboard
-  - Top 3 findings:
-    * Peak booking locations: Bangkok (X%), Singapore (Y%)
-    * Price preference: X% prefer $$, Y% prefer $$$
-    * Top cuisine type: [cuisine] with Z restaurants
+  - Screenshot
+  - Top 3 findings
 
-Key Metrics Calculated:
+Dashboard 2: Booking Patterns
+  - Screenshot
+  - Top 3 findings
+
+Key Metrics:
   - Total restaurants: X
   - Total reviews: Y
-  - Average rating: Z stars
-  - Most common price range: $
+  - Average rating: Z
+  
+Data Source: GCS Silver bucket (gs://kaggle_silver_bucket/tripadvisor_clean.csv)
+or BigQuery (if loaded independently)
 ```
 
 #### Presentation (1 min)
-- Screen shot Looker Studio
+- Screen share Looker Studio
+- Click 2-3 filters dynamically
+- "Here's what hotel managers see"
+- Point to 2-3 key business insights
 
 #### Deliverables:
 ```
-Looker Studio (1 should be enough):
+Looker Studio:
 ├── Dashboard 1: Restaurant Analytics (published link)
-├── Dashboard 2: Booking Patterns (published link)
-└── Dashboard 3: Benchmark Comparison (if created)
+└── Dashboard 2: Booking Patterns (published link)
+
+Optional BigQuery (if choosing Option B):
+└── restaurant_gold_db.restaurants
+
+Documentation:
+└── dashboard_guide.md
 ```
 
-#### Can start: **After Person 5 loads results to BigQuery** ⏳
+#### Can start: **After Person 4 completes cleaning** ⏳
 #### Blocks: **Nobody** ✅
+#### Does NOT depend on: **Person 5** ✅
 
 ---
 
 ### **PERSON 7 - Results Analysis & Tool Comparison**
 **Workload:** 🟡 **MEDIUM-HEAVY** (~18-22 hours)
 **Independence:** ❌ **DEPENDS ON PERSON 5** (Raw benchmark times)
-**Input:** Execution times from Person 5's logs
+**Input:** Execution times from Person 5's terminal logs
 **Output:** Performance comparison analysis, visualizations
 
 #### Technical Responsibilities:
 
 **1. Compile & Analyze Benchmark Data** (5-8 hours)
-- Extract execution times from Person 5's logs/images (3 runs each tool)
+- Extract execution times from Person 5's logs
 - Calculate averages, standard deviations
 - Create comparison table
 
 **2. Performance Analysis & Visualization** (8-10 hours)
 ```
-Create visualizations or table of comparison, a simple one is sufficient:
+Create visualizations:
 1. Execution Time Bar Chart
-   - Y-axis: Seconds
-   - X-axis: Tool (Spark, Hive, Pig)
-   - Show average with error bars (min/max from 3 runs)
-
 2. Memory Usage Comparison (if captured)
-   - Peak RAM per tool
-   - Average RAM per tool
-
 3. Throughput Ranking (rows/sec)
-   - Dataset size / execution time = throughput
-
 4. Tool Selection Matrix
-   - When to use each tool
-   - Pros/cons comparison
 ```
 
 **3. Comparative Insights** (5-6 hours)
-- Why is Spark fastest? (DAG optimization, in-memory)
-- Why is Hive moderate? (metastore overhead, Tez benefits)
-- Why is Pig slowest? (MapReduce, disk I/O between phases)
+- Why is Spark fastest? (DAG optimization)
+- Why is Hive moderate? (metastore overhead)
+- Why is Pig slowest? (MapReduce, disk I/O)
 - Tool selection recommendations
 
 #### Report (~2 pages)
@@ -631,61 +485,20 @@ Raw Benchmark Results Table:
   | Pig | P.PP | P.QQ | P.RR | P.PP | 0.12 |
 
 Performance Visualizations:
-  - Execution Time Bar Chart (with error bars)
+  - Execution Time Bar Chart
   - Memory Usage Comparison
-  - Throughput Ranking (rows/sec)
+  - Throughput Ranking
 
-Analysis & Findings:
-  1. Spark Performance
-     - Fastest: X.XX seconds (baseline)
-     - Y% faster than Hive
-     - Z% faster than Pig
-     - Reason: DAG optimization, in-memory processing
-     - Best for: Real-time analytics, iterative ML
-  
-  2. Hive Performance
-     - Moderate: A.AA seconds
-     - B% slower than Spark
-     - C% faster than Pig
-     - Reason: SQL query optimization, Tez improvements
-     - Best for: Data warehouse, complex joins
-  
-  3. Pig Performance
-     - Slowest: P.PP seconds
-     - D% slower than Spark
-     - E% slower than Hive
-     - Reason: MapReduce model, disk I/O overhead
-     - Best for: Complex multi-step ETL pipelines
-
-Page 12: Tool Selection Matrix
-  | Criteria | Spark | Hive | Pig |
-  | Speed | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
-  | SQL Familiarity | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ |
-  | Memory Efficiency | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-  | Ease of Learning | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-  | Recommended Use | Real-time | Data Warehouse | Complex ETL |
-
-Conclusion:
-  - Winner for this dataset: Spark (X% faster than competitors)
-  - Recommended tool selection by use case
-  - Performance implications for future scaling
+Page 12: Tool Selection Matrix & Recommendations
+  - When to use each tool
+  - Performance implications
+  - Scaling considerations
 ```
 
 #### Presentation (1.5 min)
 - Show execution time bar chart (30 sec)
 - "Spark wins by X%, here's why" (45 sec)
-- Tool selection matrix & recommendations (15 sec)
-
-#### Deliverables:
-```
-analysis/
-├── benchmark_results.csv          [Raw times from Person 5]
-├── performance_analysis.xlsx      [Calculated metrics]
-├── execution_time_chart.png       [Bar chart]
-├── memory_comparison_chart.png    [Memory usage]
-├── throughput_ranking_chart.png   [Rows/sec]
-└── tool_selection_matrix.md       [Decision matrix]
-```
+- Tool selection matrix (15 sec)
 
 #### Can start: **After Person 5 completes benchmark runs** ⏳
 #### Blocks: **Nobody** ✅
@@ -698,87 +511,39 @@ analysis/
 **Input:** All completed reports from Persons 1-7
 **Output:** Conclusion section, executive summary
 
-#### Responsibilities:
-
-**1. Project Summary** (4-5 hours)
-- Recap entire project in 1-2 pages
-- Key findings from each phase
-- Business impact
-
-**2. Conclusion & Insights** (4-5 hours)
-- Main takeaways
-- Tool selection recommendation
-- Business intelligence discoveries
-- Infrastructure validation
-
-**3. Future Work & Recommendations** (2-3 hours)
-- Suggestions for scaling
-- Additional analyses
-- Next phases
-
 #### Report (~1-1.5 pages)
 ```
 Page 13: Conclusion & Summary
 
 Executive Summary:
-  - Project objective recap (2-3 sentences)
-  - High-level approach (medallion architecture)
-  - Key findings summary (3-4 bullet points)
+  - Project recap
+  - High-level approach
+  - Key findings (3-4 bullet points)
 
 Key Findings:
-  1. Data Pipeline
-     - Successfully ingested X rows from Kaggle
-     - Cleaned Y% duplicates, reduced null by Z%
-  
-  2. Apache Tools Comparison
-     - Spark fastest at X.XX seconds
-     - Hive moderate at A.AA seconds
-     - Pig slowest at P.PP seconds
-  
-  3. Business Intelligence
-     - Bangkok is top booking location
-     - X% prefer mid-range pricing
-     - Rating correlation with review count: Y%
+  1. Data Pipeline: Ingested X rows, cleaned Y% duplicates
+  2. Apache Tools: Spark fastest, Hive moderate, Pig slowest
+  3. Business Intelligence: Top locations, pricing preferences
 
 Final Recommendations:
   - Use Spark for real-time analytics
-  - Use Hive for SQL team with complex joins
-  - Use Pig for complex ETL workflows
-  - GCP infrastructure is scalable & production-ready
+  - Use Hive for SQL team
+  - Use Pig for complex ETL
+  - GCP infrastructure is scalable
 
 Future Work:
-  1. Scale to multi-node Dataproc cluster
-  2. Implement real-time streaming with Pub/Sub + Dataflow
-  3. Extend analysis with machine learning predictions
-  4. Build cost optimization dashboard
-
-Conclusion:
-  This project successfully demonstrated a production-grade big data pipeline
-  on GCP, validated three Apache processing tools under controlled conditions,
-  and extracted actionable business intelligence from tourism data. The findings
-  enable architects to make informed tool selection decisions for their specific
-  use cases.
+  1. Multi-node scaling tests
+  2. Real-time streaming
+  3. ML predictions
+  4. Cost optimization
 ```
 
-#### Presentation (1 min)
-- "In summary, we proved..." (project recap)
-- "Winner: Spark, but choose based on your needs"
-- "GCP + Apache is production-ready"
-
-#### Deliverables:
-```
-reports/
-├── conclusion.md                  [Conclusion section]
-├── executive_summary.md           [1-page summary]
-└── final_report.pdf               [Complete 10-page report]
-```
-
-#### Can start: **After most other people complete (last phase)** ⏳
+#### Can start: **After most people complete** ⏳
 #### Blocks: **Nobody** ✅
 
 ---
 
-## **Complete Dependency Chain**
+## **UPDATED Dependency Chain - Person 5 & 6 NOW INDEPENDENT**
 
 ```
 START
@@ -787,70 +552,50 @@ START
   └─ Person 3 [IAM + Ingestion] → Bronze CSV
        ↓
        └─ Person 4 [Data Cleaning] → Silver CSV
-            ↓
-            └─ Person 5 [Apache Tools] → Gold results + Benchmark times
-                 ├─ Person 6 [Dashboard] → Looker Studio
-                 └─ Person 7 [Results Analysis] → Comparison charts
-                      ↓
-                      └─ Person 8 [Conclusion] → Final report
+            ├─ Person 5 [Apache Tools] → Benchmark metrics (local logs ONLY)
+            │    └─ Person 7 [Results Analysis] → Comparison
+            │
+            └─ Person 6 [Dashboard] → Looker Studio (INDEPENDENT ✅)
+                 
+                 └─ Person 8 [Conclusion] → Final report
 END
 ```
 
-**Key Advantage:** Only 1 chain of dependencies!
-- Person 1 & 2 work independently (no delays possible)
-- Person 3 → 4 → 5 is linear (if one delays, only next waits)
-- Person 6 & 7 both depend on Person 5 (can work in parallel)
-- Person 8 waits for all (synthesis role)
+**KEY CHANGES:**
+- ✅ Person 5 NO LONGER writes to BigQuery or Gold bucket
+- ✅ Person 5 only benchmarks, records metrics, saves logs locally
+- ✅ Person 6 reads Silver bucket DIRECTLY (can optionally load to BigQuery)
+- ✅ **Person 6 & Person 5 are COMPLETELY INDEPENDENT**
+- ✅ If Person 5 is delayed, Person 6 is NOT affected
 
 ---
 
-## **Report Page Allocation (10 pages total)**
+## **Dependency Summary**
 
-| Pages | Content | Person |
-|-------|---------|--------|
-| 1 | Abstract + Keywords | Person 1 |
-| 1 | Introduction | Person 1 |
-| 0.5 | Problem Statements | Person 1 |
-| 0.5 | Architecture & Framework | Person 2 |
-| 1 | IAM & Ingestion | Person 3 |
-| 1 | Data Cleaning | Person 4 |
-| 1 | Apache Tools Code | Person 5 |
-| 1 | Raw Benchmark Results | Person 5 |
-| 1.5 | Dashboard & BI | Person 6 |
-| 1.5 | Results Analysis & Comparison | Person 7 |
-| 1 | Conclusion & Recommendations | Person 8 |
-| **10** | **TOTAL** | |
+| Person | Depends On | Blocks | Can Parallel With |
+|--------|-----------|--------|------------------|
+| **1** | Nobody | Nobody | 2, 3 |
+| **2** | Nobody | Nobody | 1, 3 |
+| **3** | Nobody | 4 | 1, 2 |
+| **4** | 3 | 5, 6 | - |
+| **5** | 4 | 7 | 6 ✅ |
+| **6** | 4 | Nobody | 5, 7 ✅ |
+| **7** | 5 | Nobody | 6 |
+| **8** | 1,2,3,4,5,6,7 | Nobody | - |
+
+**IF PERSON 5 IS DELAYED:** Only Person 7 waits, NOT Person 6 ✅
 
 ---
 
-## **Presentation Slide Allocation (10 slides max)**
-
-| Slide | Content | Speaker | Duration |
-|-------|---------|---------|----------|
-| 1 | Title Slide | Person 1 | 15 sec |
-| 2 | Problem Statement | Person 1 | 30 sec |
-| 3 | Architecture Diagram | Person 2 | 45 sec |
-| 4 | IAM & Ingestion Flow | Person 3 | 1 min |
-| 5 | Data Cleaning Results | Person 4 | 1 min |
-| 6 | Apache Tools Code Comparison | Person 5 | 1.5 min |
-| 7 | Dashboard Screenshots | Person 6 | 1 min |
-| 8 | Benchmark Results Chart | Person 7 | 1 min |
-| 9 | Tool Selection Matrix | Person 7 | 1 min |
-| 10 | Conclusion & Recommendations | Person 8 | 1 min |
-| | **TOTAL** | | **~10 min** |
-
----
-
-## **Parallel vs. Sequential Work Timeline**
+## **Timeline**
 
 **Week 1-2:** Persons 1, 2 work independently
 **Week 2-3:** Person 3 (IAM + Ingestion)
-**Week 3-4:** Person 4 (Data Cleaning, waits for Person 3)
-**Week 4-5:** Person 5 (Apache Tools, waits for Person 4) → Persons 6 & 7 start in parallel
-**Week 5-6:** Person 6 & 7 finish (both waiting on Person 5)
-**Week 6:** Person 8 (Conclusion, synthesis)
-**Week 6:** Final report assembly & presentation practice
+**Week 3-4:** Person 4 (Data Cleaning)
+**Week 4-5:** Persons 5 & 6 start in PARALLEL (independent of each other)
+- Person 5: Benchmarking only
+- Person 6: Dashboard from Silver bucket
+**Week 5-6:** Person 7 (Results, waits on P5)
+**Week 6:** Person 8 (Conclusion)
 
-**No person should be blocked waiting** except as indicated above (linear chain).
-
----
+**Person 6 is no longer blocked by Person 5** ✅
