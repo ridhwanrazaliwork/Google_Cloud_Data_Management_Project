@@ -22,7 +22,7 @@ Person 8 (Conclusion) → Depends on: All completed ✓ (synthesis only)
 ## Person-by-Person Detailed Breakdown
 
 ### **PERSON 1 - Introduction, Abstract, Problem Statements**
-**Workload:** 🟢 **LIGHT** (~10-12 hours)
+**Workload:** 🟢 **LIGHT**
 **Independence:** ✅ **FULLY INDEPENDENT** (no technical dependencies)
 
 #### Deliverables:
@@ -63,11 +63,11 @@ Page 2-2.5: Problem Statements
 ---
 
 ### **PERSON 2 - Architecture & Framework Explanation**
-**Workload:** 🟢 **LIGHT** (~10-12 hours)
+**Workload:** 🟢 **LIGHT**
 **Independence:** ✅ **FULLY INDEPENDENT** (no technical dependencies)
 
 #### Deliverables:
-- Architecture diagrams (Mermaid or visual)
+- Architecture diagrams (Mermaid or visual or excalidraw)
 - Framework explanation (Medallion architecture)
 - GCP service stack diagram
 - Data flow pipeline visualization
@@ -78,7 +78,7 @@ Page 3: Framework Design & Medallion Architecture
   - Bronze layer (raw data)
   - Silver layer (cleaned data)
   - Gold layer (curated/aggregated data)
-  - Visual diagram for each
+  - Visual diagram
 
 Page 3.5-4: GCP Service Stack
   - Cloud Run (ingestion)
@@ -87,6 +87,26 @@ Page 3.5-4: GCP Service Stack
   - BigQuery (warehouse)
   - Looker Studio (BI)
   - Diagram showing all services
+
+Expected flow that we might have:
+
+1. **Ingestion (Bronze Layer)**  
+   - Kaggle API → Cloud Run (Flask app) → Raw CSV stored in `gs://kaggle_bronze/`
+
+2. **Quality Engineering (Silver Layer)**  
+   - Clean using either:  
+     - Cloud DataPrep (no‑code, deduplication, null removal) **or**  
+     - PySpark + Great Expectations (programmatic) in dataproc **or** Bigquery
+  
+   - Output to `gs://kaggle_silver/`
+
+3. **Metric Engineering (Gold Layer)**  
+   - Dataproc cluster (e2-highmem-4) processes silver data via PySpark, Hive, or Pig  
+   - Curated results written to BigQuery (`restaurant_gold_db`)
+
+4. **Consumption**  
+   - Looker Studio dashboard connected directly to BigQuery
+
 ```
 
 #### Presentation (1 min)
@@ -100,128 +120,31 @@ Page 3.5-4: GCP Service Stack
 ---
 
 ### **PERSON 3 (RIDHWAN) - IAM, Access Management & Ingestion**
-**Workload:** 🔴 **VERY HEAVY** (~40-50 hours)
+**Workload:** 🔴 ** HEAVY**
 **Independence:** ✅ **INDEPENDENT** (first in data pipeline chain)
 **Output:** `gs://kaggle_bronze_bucket/bronze_tripadvisor.csv`
 
 #### Technical Responsibilities:
 
-**1. IAM & Service Account Setup** (5-8 hours)
+**1. IAM & Service Account Setup** 
+
 ```bash
-# Create service account
-gcloud iam service-accounts create bigdata-pipeline \
-  --display-name="Big Data Pipeline Service Account"
-
-# Assign roles
-gcloud projects add-iam-policy-binding PROJECT_ID \
-  --member="serviceAccount:bigdata-pipeline@PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/storage.admin"
-
-gcloud projects add-iam-policy-binding PROJECT_ID \
-  --member="serviceAccount:bigdata-pipeline@PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/secretmanager.secretAccessor"
-
-gcloud projects add-iam-policy-binding PROJECT_ID \
-  --member="serviceAccount:bigdata-pipeline@PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/dataproc.editor"
-
-gcloud projects add-iam-policy-binding PROJECT_ID \
-  --member="serviceAccount:bigdata-pipeline@PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/bigquery.admin"
+for ROLE in storage.admin secretmanager.secretAccessor dataproc.editor metastore.editor bigquery.admin; do \
+  gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+    --role="roles/${ROLE}"; \
+done
 ```
 
-**2. Secret Manager Setup** (3-5 hours)
+
+**2. Secret Manager Setup**
 - Store `kaggle.json` in Secret Manager
 - Path: `projects/{PROJECT_ID}/secrets/kaggle-json/versions/latest`
 - Create access credentials for team members
 
-**3. Cloud Run Ingestion Deployment** (15-20 hours)
-```python
-# src/ingestion/ingestion_cloudrun.py
-import os, json, logging, pandas as pd, kagglehub
-from flask import Flask, jsonify, request
-from google.cloud import storage, secretmanager
+**3. Cloud Run Ingestion Deployment** 
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-app = Flask(__name__)
-
-def load_kaggle_credentials():
-    project_id = os.getenv("PROJECT_ID")
-    client = secretmanager.SecretManagerServiceClient()
-    secret_name = f"projects/{project_id}/secrets/kaggle-json/versions/latest"
-    
-    response = client.access_secret_version(name=secret_name)
-    creds = json.loads(response.payload.data.decode("UTF-8"))
-    
-    os.environ["KAGGLE_USERNAME"] = creds["username"]
-    os.environ["KAGGLE_KEY"] = creds["key"]
-    logger.info("Kaggle credentials loaded")
-
-@app.route("/ingest", methods=["POST", "GET"])
-def ingestion_kaggle(request=None):
-    try:
-        project_id = os.getenv("PROJECT_ID")
-        bronze_bucket = os.getenv("BRONZE_BUCKET")
-        
-        load_kaggle_credentials()
-        
-        # Download from Kaggle
-        logger.info("Downloading TripAdvisor dataset...")
-        download_path = kagglehub.dataset_download(
-            "siddharthmandgi/tripadvisor-restaurant-recommendation-data-usa"
-        )
-        
-        # Find CSV file
-        csv_files = [f for f in os.listdir(download_path) if f.endswith(".csv")]
-        csv_file = csv_files[0]
-        local_csv_path = os.path.join(download_path, csv_file)
-        
-        # Load and standardize
-        df = pd.read_csv(local_csv_path)
-        df.columns = [col.lower().replace(" ", "_").replace("-", "_") for col in df.columns]
-        
-        # Save locally
-        modified_local_path = "/tmp/bronze_tripadvisor.csv"
-        df.to_csv(modified_local_path, index=False)
-        logger.info(f"Dataset standardized: {df.shape}")
-        
-        # Upload to GCS
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(bronze_bucket)
-        blob = bucket.blob("bronze_tripadvisor.csv")
-        blob.upload_from_filename(modified_local_path)
-        
-        logger.info(f"Upload complete → gs://{bronze_bucket}/bronze_tripadvisor.csv")
-        
-        return jsonify({
-            "status": "success",
-            "layer": "Bronze",
-            "destination": f"gs://{bronze_bucket}/bronze_tripadvisor.csv",
-            "row_count": int(df.shape[0]),
-            "column_count": int(df.shape[1]),
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
-```
-
-**4. Environment Variable Configuration** (3-5 hours)
-```bash
-export PROJECT_ID="bigdatamanagement-497302"
-export REGION="asia-southeast1"
-export BRONZE_BUCKET="kaggle_bronze_bucket"
-export SILVER_BUCKET="kaggle_silver_bucket"
-export GOLD_BUCKET="kaggle_gold_bucket"
-export SERVICE_ACCOUNT_EMAIL="bigdata-pipeline@PROJECT_ID.iam.gserviceaccount.com"
-```
-
-**5. Test & Validate Ingestion** (5-10 hours)
+**4. Test & Validate Ingestion**
 - Deploy Cloud Run function
 - Test curl request
 - Verify CSV uploaded to Bronze bucket
@@ -240,7 +163,6 @@ Page 5.5-6: Data Ingestion Pipeline
   - Cloud Run Flask app architecture
   - Secret Manager integration (Kaggle credentials)
   - Kaggle API authentication flow
-  - Column standardization logic (lowercase, underscores)
   - GCS Bronze bucket output
   - Sample output: Row count, column count
   - Execution logs & error handling
@@ -257,12 +179,6 @@ Page 5.5-6: Data Ingestion Pipeline
 src/ingestion/
 ├── ingestion_cloudrun.py          [Flask app]
 ├── requirements.txt               [Dependencies]
-└── deployment_guide.md            [Step-by-step]
-
-scripts/
-├── setup_iam.sh                   [IAM role assignment]
-├── setup_secret_manager.sh        [Kaggle credentials]
-└── deploy_cloud_run.sh            [Deployment script]
 
 Output: gs://kaggle_bronze_bucket/bronze_tripadvisor.csv
 ```
@@ -275,8 +191,8 @@ Output: gs://kaggle_bronze_bucket/bronze_tripadvisor.csv
 ### **PERSON 4 - Data Cleaning (Cloud Dataprep)**
 **Workload:** 🟡 **MEDIUM** (~15-20 hours)
 **Independence:** ❌ **DEPENDS ON PERSON 3** (Bronze CSV)
-**Input:** `gs://kaggle_bronze_bucket/bronze_tripadvisor.csv`
-**Output:** `gs://kaggle_silver_bucket/tripadvisor_clean.csv`
+**Input:** `gs://kaggle_bronze_bucket/raw/raw_bronze.csv`
+**Output:** `gs://kaggle_silver_bucket/clean/clean_silver.csv`
 
 #### Technical Responsibilities:
 
@@ -311,7 +227,7 @@ Recipe 4: Structural Cleaning
 
 **3. Execute Recipes & Validate Output** (3-5 hours)
 - Run Dataprep recipes to completion
-- Output to GCS Silver bucket: `gs://kaggle_silver_bucket/tripadvisor_clean.csv`
+- Output to GCS Silver bucket: `gs://kaggle_silver_bucket/clean/clean_silver.csv`
 - Generate data quality report
 - Record before/after metrics
 
@@ -343,7 +259,7 @@ Page 7: Data Cleaning & Quality Engineering
     | Duplicates | D rows | 0 | -D rows |
   
   - Sample clean data (5 rows showing structure)
-  - Output location: gs://kaggle_silver_bucket/tripadvisor_clean.csv
+  - Output location: `gs://kaggle_silver_bucket/clean/clean_silver.csv`
 ```
 
 #### Presentation (1 min)
@@ -370,9 +286,11 @@ Output: gs://kaggle_silver_bucket/tripadvisor_clean.csv
 ---
 
 ### **PERSON 5 - Apache Tools Comparison (Spark, Hive, Pig)**
-**Workload:** 🔴 **VERY HEAVY** (~40-50 hours)
+**Workload:** 🔴 **VERY HEAVY**
 **Independence:** ❌ **DEPENDS ON PERSON 4** (Silver CSV)
-**Input:** `gs://kaggle_silver_bucket/tripadvisor_clean.csv`
+**Input:** `gs://kaggle_silver_bucket/clean/clean_silver.csv`
+
+# We use Only the best/fastest tools for writing the output to GCS, Bigquery
 **Output:** 
 - `gs://kaggle_gold_bucket/spark_results/`
 - `gs://kaggle_gold_bucket/hive_results/`
@@ -381,7 +299,7 @@ Output: gs://kaggle_silver_bucket/tripadvisor_clean.csv
 
 #### Technical Responsibilities:
 
-**1. PySpark Implementation** (12-15 hours)
+**1. PySpark Implementation** (Sample code, which u can find in the repo as well)
 ```python
 # src/compute/dataproc_spark.py
 import time
@@ -434,7 +352,7 @@ print("=" * 60)
 spark.stop()
 ```
 
-**2. HiveQL Implementation** (12-15 hours)
+**2. HiveQL Implementation** (Sample code, which u can find in the repo as well)
 ```sql
 -- src/compute/dataproc_hive.hql
 CREATE EXTERNAL TABLE tripadvisor_clean_table (
@@ -457,7 +375,7 @@ ORDER BY total_restaurants DESC
 LIMIT 5;
 ```
 
-**3. Pig Latin Implementation** (12-15 hours)
+**3. Pig Latin Implementation** (Sample code, which u can find in the repo as well)
 ```pig
 -- src/compute/dataproc_pig.pig
 tripadvisor = LOAD 'gs://kaggle_silver_bucket/tripadvisor_clean.csv' 
@@ -481,8 +399,8 @@ limited = LIMIT sorted 5;
 STORE limited INTO 'gs://kaggle_gold_bucket/pig_results/';
 ```
 
-**4. Execution & Timing** (8-10 hours)
-- Run each tool 3 times on Dataproc cluster
+**4. Execution & Timing**
+- Run each tool 1 or 2 times on Dataproc cluster
 - Record execution times for each run
 - Use `time` command to capture wall-clock time:
   ```bash
@@ -505,7 +423,6 @@ STORE limited INTO 'gs://kaggle_gold_bucket/pig_results/';
   echo "Pig Runtime: $((end_time - start_time)) seconds"
   ```
 - Screenshot output logs
-- Verify all three produce identical results
 
 #### Report (~1.5-2 pages)
 ```
@@ -517,9 +434,8 @@ Page 8: Apache Tools Implementation
    - Execution time (3 runs):
      * Run 1: X.XX seconds
      * Run 2: X.YY seconds
-     * Run 3: X.ZZ seconds
      * Average: X.XX seconds
-   - Sample output (5 rows)
+   - Sample output (5 rows) or image of the output
    - GitHub link: src/compute/dataproc_spark.py
 
 2. HiveQL Implementation
@@ -528,9 +444,8 @@ Page 8: Apache Tools Implementation
    - Execution time (3 runs):
      * Run 1: A.AA seconds
      * Run 2: A.BB seconds
-     * Run 3: A.CC seconds
      * Average: A.AA seconds
-   - Sample output (5 rows)
+   - Sample output (5 rows) or image of the output
    - GitHub link: src/compute/dataproc_hive.hql
 
 3. Pig Latin Implementation
@@ -539,9 +454,8 @@ Page 8: Apache Tools Implementation
    - Execution time (3 runs):
      * Run 1: P.PP seconds
      * Run 2: P.QQ seconds
-     * Run 3: P.RR seconds
      * Average: P.PP seconds
-   - Sample output (5 rows)
+   - Sample output (5 rows) or image of the output
    - GitHub link: src/compute/dataproc_pig.pig
 
 Page 9: Raw Benchmark Results
@@ -550,6 +464,8 @@ Page 9: Raw Benchmark Results
    - Terminal screenshots with timestamps
    - Any anomalies or exceptions documented
 ```
+
+# NOTE: Can also use information from Yarn
 
 #### Presentation (1.5 min)
 - Show 3 code snippets (30 sec each)
@@ -563,7 +479,7 @@ src/compute/
 ├── dataproc_hive.hql              [HiveQL script]
 ├── dataproc_pig.pig               [Pig Latin script]
 └── benchmark_logs/
-    ├── spark_run1.log             [Execution log + time]
+    ├── spark_run1.log             [Execution log + time] if have
     ├── spark_run2.log
     ├── spark_run3.log
     ├── hive_run1.log
@@ -573,12 +489,12 @@ src/compute/
     ├── pig_run2.log
     └── pig_run3.log
 
-Output:
+Output (only one of the output below, the best tool):
 ├── gs://kaggle_gold_bucket/spark_results/
 ├── gs://kaggle_gold_bucket/hive_results/
 └── gs://kaggle_gold_bucket/pig_results/
 
-BigQuery Tables:
+BigQuery Tables (only one of the output below, the best tool):
 ├── restaurant_gold_db.spark_benchmark_results
 ├── restaurant_gold_db.hive_benchmark_results
 └── restaurant_gold_db.pig_benchmark_results
@@ -603,7 +519,11 @@ BigQuery Tables:
 - Define schemas for optimal querying
 - Ensure all three tool results loaded successfully
 
-**2. Looker Studio Dashboard Creation** (10-14 hours)
+**2. Looker Studio Dashboard Creation**
+
+A simple dashboard is sufficient
+
+#### Example ideas:
 
 **Dashboard 1: Restaurant Analytics**
 - Top 10 restaurants by location & price range (table + bar chart)
@@ -646,25 +566,14 @@ Key Metrics Calculated:
 ```
 
 #### Presentation (1 min)
-- Screen share Looker Studio
-- Click 2-3 filters dynamically
-- "Here's what hotel managers see"
-- Point to 2-3 key business insights
+- Screen shot Looker Studio
 
 #### Deliverables:
 ```
-Looker Studio:
+Looker Studio (1 should be enough):
 ├── Dashboard 1: Restaurant Analytics (published link)
 ├── Dashboard 2: Booking Patterns (published link)
 └── Dashboard 3: Benchmark Comparison (if created)
-
-BigQuery:
-├── restaurant_gold_db.restaurants
-├── restaurant_gold_db.bookings
-└── restaurant_gold_db.reviews
-
-Documentation:
-└── dashboard_guide.md (how to refresh, add filters, etc.)
 ```
 
 #### Can start: **After Person 5 loads results to BigQuery** ⏳
@@ -681,13 +590,13 @@ Documentation:
 #### Technical Responsibilities:
 
 **1. Compile & Analyze Benchmark Data** (5-8 hours)
-- Extract execution times from Person 5's logs (3 runs each tool)
+- Extract execution times from Person 5's logs/images (3 runs each tool)
 - Calculate averages, standard deviations
 - Create comparison table
 
 **2. Performance Analysis & Visualization** (8-10 hours)
 ```
-Create visualizations:
+Create visualizations or table of comparison, a simple one is sufficient:
 1. Execution Time Bar Chart
    - Y-axis: Seconds
    - X-axis: Tool (Spark, Hive, Pig)
@@ -945,7 +854,3 @@ END
 **No person should be blocked waiting** except as indicated above (linear chain).
 
 ---
-
-This structure achieves your goal of **minimal dependencies**. Each person knows exactly what they need to do, when they can start, and what they're blocking for others.
-
-Does this look good? Ready to create the GitHub organization files?
