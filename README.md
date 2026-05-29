@@ -12,48 +12,16 @@
 ## Defined Problem Statements
 
 ### Problem Statement 1: Data Ingestion & Quality (Bronze → Silver Layers)
-**Question:** How can we efficiently ingest raw TripAdvisor data from Kaggle and ensure data quality through automated cleaning pipelines?
-
-**Challenge:** 
-- Raw data contains duplicates, null values, inconsistent column naming
-- Need scalable ingestion mechanism (Cloud Run + Kaggle API)
-- Data quality must be validated before downstream processing
-
-**Solution Approach:**
-- Cloud Run Flask app fetches data from Kaggle
-- Cloud Dataprep removes duplicates, null values, standardizes types
-- Output to Silver layer (cleaned, standardized data)
 
 ---
 
+
 ### Problem Statement 2: Business Intelligence & Analytics (Silver → Dashboard)
-**Question:** What key drivers of customer satisfaction can be discovered from the dataset and visualized through interactive dashboards?
-
-**Challenge:**
-- Stakeholders need actionable insights from restaurant data
-- Queries include: top locations, price preferences, rating correlations
-- Need real-time dashboard for hotel managers
-
-**Solution Approach:**
-- Load cleaned Silver data directly to Looker Studio OR BigQuery
-- Build interactive dashboards with filters (location, price range, ratings)
-- Extract business metrics: daily bookings, popular restaurants, pricing trends
 
 ---
 
 ### Problem Statement 3: Compute Engine Performance Benchmarking (Apache Tools Comparison)
-**Question:** Which distributed processing tool—Apache Spark, Hive, or Pig—delivers the best computational performance when processing the dataset?
 
-**Challenge:**
-- Organizations must choose between Spark (fast, in-memory), Hive (SQL-friendly), Pig (procedural ETL)
-- Each has different performance characteristics, memory profiles, and learning curves
-- Need quantitative comparison under identical workloads
-
-**Solution Approach:**
-- Execute identical aggregation query on all three tools
-- Record execution time, memory usage, throughput metrics
-- Analyze performance differences and provide recommendations
-- **Note:** Results saved locally only (no Gold layer writes by P5) - analysis done separately by P7
 
 ---
 
@@ -148,29 +116,12 @@ BigDataManagement_Project/
 │   │   ├── dataproc_spark.py         # PySpark benchmark (local logs only)
 │   │   ├── dataproc_hive.hql         # HiveQL benchmark script
 │   │   ├── dataproc_pig.pig          # Pig Latin benchmark script
-│   │   └── benchmark_logs/           # Execution logs (NOT BigQuery writes)
-│   │       ├── spark_run1.log
-│   │       ├── spark_run2.log
-│   │       ├── hive_run1.log
-│   │       └── pig_run1.log
 │   │
 │   └── images/
 │       ├── CloudShell_openeditor_button.png
 │       ├── Example_spark_output.png
 │       ├── Example_hive_output.png
 │       └── Example_pig_output.png
-│
-├── dataprep/                          # Cloud Dataprep artifacts
-│   ├── dataprep_recipe.json          # Exported cleaning recipe
-│   ├── before_profile.csv            # Data quality before
-│   ├── after_profile.csv             # Data quality after
-│   └── quality_report.md             # Summary metrics
-│
-├── analysis/                          # Performance analysis
-│   ├── benchmark_results.csv         # Raw timing data
-│   ├── performance_analysis.xlsx     # Calculated metrics
-│   ├── execution_time_chart.png      # Comparison chart
-│   └── tool_selection_matrix.md      # Recommendations
 │
 ├── TEAM_ALLOCATION.md                 # 8-person team roles & dependencies
 ├── README.md                          # This file
@@ -612,31 +563,12 @@ Memory usage (if captured)
 ## Running the Project End-to-End
 
 ### Timeline
-1. **Week 1-2:** Persons 1, 2 work (independent)
-2. **Week 2-3:** Person 3 deploys ingestion
-3. **Week 3-4:** Person 4 cleans data
-4. **Week 4-5:** Persons 5 & 6 work in **PARALLEL**
-   - P5: Runs Spark, Hive, Pig benchmarks
-   - P6: Builds Looker Studio dashboard
-5. **Week 5:** Person 7 analyzes results
-6. **Week 6:** Person 8 writes conclusion + final assembly
+1. we only have 2 weeks...
 
 ### No Blocking!
 - If Person 5 delays → Only Person 7 waits, NOT Person 6 ✅
 - Each person knows exactly when to start and what they need
 
----
 
-## References & Additional Resources
-
-- **Apache Spark Documentation:** https://spark.apache.org/docs/
-- **Apache Hive Documentation:** https://hive.apache.org/
-- **Apache Pig Documentation:** https://pig.apache.org/
-- **Google Cloud Dataproc:** https://cloud.google.com/dataproc/docs
-- **Google Cloud Storage:** https://cloud.google.com/storage/docs
-- **Looker Studio:** https://support.google.com/looker-studio
-- **TripAdvisor Dataset:** https://www.kaggle.com/datasets/
-
----
 
 **For detailed team member responsibilities, see:** [TEAM_ALLOCATION.md](TEAM_ALLOCATION.md)
