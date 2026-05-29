@@ -1,128 +1,253 @@
-# Big Data Pipeline: Performance comparison with Apache tools
+# Big Data Pipeline: Performance Comparison with Apache Tools
 
 ---
 
 ## Project Overview & Domain
 - **Domain:** Tourism and hospitality
-- **Dataset:** To be filled (In this example i use random tripadvisor dataset on kaggle)
-
-- **Project option:** build a complete big data solution using different tools with a number of problem statements + comparison results of different Apache technologies
-
-Example Problem Statements:
-1. Data Ingestion and Quality (Bronze & Silver Layers) 
-- How can we efficiently ingest raw Tripadvisor data from Kaggle and ensure data quality using parallel engineering paths (Cloud DataPrep and PySpark)?
-2. Technology Performance Comparison (Gold Layer) 
-- Which distributed processing tool—PySpark, Apache Hive, or Apache Pig—delivers the best computational performance when processing the dataset?
-3. Business Intelligence and Insights (Downstream Consumption) 
-- What key drivers of customer satisfaction can be discovered from the dataset and visualized through interactive Looker Studio dashboards?
-
-```mermaid
-flowchart TB
-    subgraph BRONZE["BRONZE LAYER (Raw) — Step 1: Ingestion"]
-        A["Cloud Run<br/>Python Flask App"] -->|"Kaggle API request"| B["Kaggle Dataset<br/>TripAdvisor Restaurant"]
-        B -->|"streams raw CSV"| C["GCS Bronze Bucket<br/>gs://kaggle_bronze/<br/>bronze_tripadvisor.csv"]
-        A --> C
-    end
-
-    subgraph SILVER["SILVER LAYER (Cleaned) — Step 2: Quality Engineering"]
-        C -->|"dual paths"| D{"Choose<br/>engineering<br/>approach"}
-        D -->|"Path A: No-Code (Easier approach)"| E["Cloud DataPrep<br/>Deduplication · Null Removal<br/>Structural Splitting"]
-        D -->|"Path B: Code-First"| F["PySpark +<br/>Great Expectations<br/>Programmatic Validation"]
-        E --> G["GCS Silver Bucket<br/>gs://kaggle_silver/<br/>tripadvisor_raw/"]
-        F --> G
-    end
-
-    subgraph GOLD["GOLD LAYER (Curated) — Step 3: Distributed Metric Engineering"]
-        G --> H["Dataproc Cluster<br/>e2-highmem-4 · 4 vCPU · 32 GB RAM<br/>Hive External Table → GCS"]
-        
-        H --> I["PySpark<br/>In-Memory DAG<br/>Aggregation"]
-        H --> J["Apache Hive<br/>(Tez Engine)<br/>Declarative SQL"]
-        H --> K["Apache Pig<br/>(MapReduce)<br/>Procedural Dataflow"]
-        
-        I -->|"native write"| L["BigQuery Gold Layer<br/>restaurant_gold_db"]
-        J -->|"native write"| L
-        K -->|"writes to GCS"| M["GCS Gold Partition"]
-        M -->|"bq load CLI"| L
-    end
-
-    subgraph BI["DOWNSTREAM CONSUMPTION — Step 4: Business Intelligence"]
-        L --> N["Looker Studio<br/>Interactive Dashboards"]
-        
-    end
-
-    style BRONZE fill:#e8d5b7,stroke:#b8860b,color:#000
-    style SILVER fill:#d0d0d0,stroke:#708090,color:#000
-    style GOLD fill:#ffd700,stroke:#b8860b,color:#000
-    style BI fill:#98fb98,stroke:#228b22,color:#000
-```
+- **Dataset:** TripAdvisor Restaurant Recommendation Data (from Kaggle)
+- **Project Approach:** Build a complete big data solution with multiple problem statements + performance comparison of Apache technologies (Spark, Hive, Pig)
 
 ---
 
 ## Defined Problem Statements
 
-### 1. Ingestion & Data Quality/Cleaning
+### Problem Statement 1: Data Ingestion & Quality (Bronze → Silver Layers)
+**Question:** How can we efficiently ingest raw TripAdvisor data from Kaggle and ensure data quality through automated cleaning pipelines?
 
-### 2. Business Value Extraction
+**Challenge:** 
+- Raw data contains duplicates, null values, inconsistent column naming
+- Need scalable ingestion mechanism (Cloud Run + Kaggle API)
+- Data quality must be validated before downstream processing
 
-### 3. Compute Engine Apache Tools Benchmarking
+**Solution Approach:**
+- Cloud Run Flask app fetches data from Kaggle
+- Cloud Dataprep removes duplicates, null values, standardizes types
+- Output to Silver layer (cleaned, standardized data)
 
 ---
 
-## Tech Stack & GCP Infrastructure Map (Medallion architecture)
+### Problem Statement 2: Business Intelligence & Analytics (Silver → Dashboard)
+**Question:** What key drivers of customer satisfaction can be discovered from the dataset and visualized through interactive dashboards?
 
+**Challenge:**
+- Stakeholders need actionable insights from restaurant data
+- Queries include: top locations, price preferences, rating correlations
+- Need real-time dashboard for hotel managers
+
+**Solution Approach:**
+- Load cleaned Silver data directly to Looker Studio OR BigQuery
+- Build interactive dashboards with filters (location, price range, ratings)
+- Extract business metrics: daily bookings, popular restaurants, pricing trends
+
+---
+
+### Problem Statement 3: Compute Engine Performance Benchmarking (Apache Tools Comparison)
+**Question:** Which distributed processing tool—Apache Spark, Hive, or Pig—delivers the best computational performance when processing the dataset?
+
+**Challenge:**
+- Organizations must choose between Spark (fast, in-memory), Hive (SQL-friendly), Pig (procedural ETL)
+- Each has different performance characteristics, memory profiles, and learning curves
+- Need quantitative comparison under identical workloads
+
+**Solution Approach:**
+- Execute identical aggregation query on all three tools
+- Record execution time, memory usage, throughput metrics
+- Analyze performance differences and provide recommendations
+- **Note:** Results saved locally only (no Gold layer writes by P5) - analysis done separately by P7
+
+---
+
+## Tech Stack & GCP Infrastructure Map (Medallion Architecture)
+
+### Storage Layers
+| Layer | Purpose | Storage | Managed By |
+|-------|---------|---------|-----------|
+| **Bronze** | Raw ingestion | GCS Bucket | Person 3 (Ingestion) |
+| **Silver** | Cleaned, deduplicated | GCS Bucket | Person 4 (Data Cleaning) |
+| **Gold** | Curated metrics | Dashboard/BigQuery | Person 6 (Dashboard) |
+
+### GCP Services
 - **Ingestion:** Google Cloud Run (Python Flask + KaggleHub + Secret Manager)
-- **Storage Landing Zone:** Google Cloud Storage (GCS) Buckets (`kaggle_bronze_bucket`, `kaggle_silver_bucket`, `kaggle_gold_bucket`)
+- **Storage Landing Zones:** Google Cloud Storage (GCS) Buckets (`kaggle_bronze_bucket`, `kaggle_silver_bucket`)
 - **Data Quality Automation:** Cloud Dataprep by Trifacta (Alteryx)
-- **Distributed Processing:** GCP Dataproc Cluster (Managed Apache Spark) (e2-highmem-4, 4 vCPU, 16 GB RAM) — Hive external tables read directly from GCS
-- **Compute Engines Benchmarked:** Apache Spark (PySpark) · Apache Hive (Tez) · Apache Pig (MapReduce)
-- **Enterprise Warehouse:** Google BigQuery
-- **Business Intelligence Dashboard:** Looker Studio (Data Studio)
+- **Distributed Processing:** GCP Dataproc Cluster (Managed Apache Spark/Hive/Pig)
+  - Machine Type: e2-highmem-4 (4 vCPU, 32 GB RAM)
+  - Image Version: 2.3.30-ubuntu22
+  - Optional Components: Jupyter, Zookeeper, Iceberg, Pig
+- **Compute Engines Benchmarked:** 
+  - Apache Spark (PySpark) — In-memory DAG
+  - Apache Hive (Tez Engine) — SQL-on-Hadoop
+  - Apache Pig (MapReduce) — Procedural Dataflow
+- **Business Intelligence:** Looker Studio (connected to GCS Silver CSV or BigQuery)
 - **Secrets Management:** Google Cloud Secret Manager (Kaggle API credentials)
+
+---
+
+## Project Architecture & Data Flow
+
+```mermaid
+flowchart TB
+    subgraph BRONZE["BRONZE LAYER (Raw) — Step 1: Ingestion — Person 3"]
+        A["Cloud Run<br/>Python Flask App"] -->|"Kaggle API request"| B["Kaggle Dataset<br/>TripAdvisor Restaurant"]
+        B -->|"streams raw CSV"| C["GCS Bronze Bucket<br/>gs://kaggle_bronze/<br/>bronze_tripadvisor.csv"]
+        A --> C
+    end
+
+    subgraph SILVER["SILVER LAYER (Cleaned) — Step 2: Quality Engineering — Person 4"]
+        C -->|"Cloud Dataprep"| D["Cloud DataPrep<br/>Deduplication · Null Removal<br/>Type Casting · Standardization"]
+        D --> G["GCS Silver Bucket<br/>gs://kaggle_silver/<br/>tripadvisor_clean.csv"]
+    end
+
+    subgraph COMPUTE["COMPUTE LAYER — Step 3: Benchmarking — Person 5 ONLY"]
+        G --> H["Dataproc Cluster<br/>e2-highmem-4 · 4 vCPU · 32 GB RAM"]
+        
+        H --> I["Apache Spark<br/>(PySpark)<br/>In-Memory DAG"]
+        H --> J["Apache Hive<br/>(Tez Engine)<br/>Declarative SQL"]
+        H --> K["Apache Pig<br/>(MapReduce)<br/>Procedural Dataflow"]
+        
+        I -->|"saves locally"| L["Local Benchmark Logs<br/>execution_time.txt<br/>memory_profile.txt"]
+        J -->|"saves locally"| L
+        K -->|"saves locally"| L
+    end
+
+    subgraph BI["DASHBOARD — Step 4: Business Intelligence — Person 6 INDEPENDENT"]
+        G -->|"reads directly"| M["Looker Studio<br/>Connected to Silver CSV or BigQuery"]
+        M --> N["Interactive Dashboards<br/>Restaurant Analytics<br/>Booking Patterns<br/>Price Distribution"]
+    end
+
+    subgraph ANALYSIS["RESULTS ANALYSIS — Step 5: Performance Comparison — Person 7"]
+        L -->|"extracts metrics"| O["Performance Analysis<br/>Execution Time Comparison<br/>Memory Usage Analysis<br/>Throughput Ranking"]
+        O --> P["Tool Selection Matrix<br/>Recommendations by Use Case"]
+    end
+
+    style BRONZE fill:#e8d5b7,stroke:#b8860b,color:#000
+    style SILVER fill:#d0d0d0,stroke:#708090,color:#000
+    style COMPUTE fill:#fff7dc,stroke:#b8860b,color:#000
+    style BI fill:#98fb98,stroke:#228b22,color:#000
+    style ANALYSIS fill:#87ceeb,stroke:#4682b4,color:#000
+```
+
+**Key Changes from Previous Architecture:**
+- ✅ Person 5 benchmarks ONLY (no BigQuery/Gold writes)
+- ✅ Person 6 reads Silver directly (independent from Person 5)
+- ✅ Person 7 analyzes benchmark metrics separately
+- ✅ Person 6 and Person 5 work in PARALLEL (no dependency)
 
 ---
 
 ## VS Code Project Structure
 
 ```text
+BigDataManagement_Project/
 ├── src/
 │   ├── ingestion/
-│   │   ├── ingestion_cloudrun.py # Cloud Run Flask app (Kaggle download → GCS Bronze)
-│   │   └── requirements.txt      # Python dependencies
-│   │   
-│   └── compute/
-│       ├── dataproc_spark.py     # PySpark DataFrame job (in-memory DAG)
-│       ├── dataproc_hive.hql     # HiveQL script (Tez execution engine)
-│       └── dataproc_pig.pig      # Pig Latin script (MapReduce execution engine)
-├── scripts/
-└── README.md                     # Technical documentation
+│   │   ├── ingestion_cloudrun.py     # Cloud Run Flask app (Kaggle → Bronze)
+│   │   └── requirements.txt          # Python dependencies
+│   │
+│   ├── compute/
+│   │   ├── dataproc_spark.py         # PySpark benchmark (local logs only)
+│   │   ├── dataproc_hive.hql         # HiveQL benchmark script
+│   │   ├── dataproc_pig.pig          # Pig Latin benchmark script
+│   │   └── benchmark_logs/           # Execution logs (NOT BigQuery writes)
+│   │       ├── spark_run1.log
+│   │       ├── spark_run2.log
+│   │       ├── hive_run1.log
+│   │       └── pig_run1.log
+│   │
+│   └── images/
+│       ├── CloudShell_openeditor_button.png
+│       ├── Example_spark_output.png
+│       ├── Example_hive_output.png
+│       └── Example_pig_output.png
+│
+├── dataprep/                          # Cloud Dataprep artifacts
+│   ├── dataprep_recipe.json          # Exported cleaning recipe
+│   ├── before_profile.csv            # Data quality before
+│   ├── after_profile.csv             # Data quality after
+│   └── quality_report.md             # Summary metrics
+│
+├── analysis/                          # Performance analysis
+│   ├── benchmark_results.csv         # Raw timing data
+│   ├── performance_analysis.xlsx     # Calculated metrics
+│   ├── execution_time_chart.png      # Comparison chart
+│   └── tool_selection_matrix.md      # Recommendations
+│
+├── TEAM_ALLOCATION.md                 # 8-person team roles & dependencies
+├── README.md                          # This file
+└── .gitignore
 ```
+
+---
+
+## 8-Person Team Allocation & Roles
+
+### Team Member Roles & Deliverables
+
+| # | Person | Role | Technical Work | Report Section | Dependency | Status |
+|---|--------|------|----------------|----------------|-----------|--------|
+| **1** | Person 1 | Intro & Problems | ❌ None | Abstract, Keywords, Introduction, Problem Statements | Independent ✅ | ~1.5-2 pages |
+| **2** | Person 2 | Architecture | ❌ None | Architecture Diagram, Framework Explanation | Independent ✅ | ~0.5 pages |
+| **3** | Person 3 (RIDHWAN - Admin) | IAM + Ingestion | ✅ Cloud Run + Secret Manager | IAM Setup, Ingestion Pipeline, Bronze Output | Independent ✅ | ~2-2.5 pages |
+| **4** | Person 4 | Data Cleaning | ✅ Cloud Dataprep | Data Quality, Deduplication, Null Handling | Depends on P3 ⏳ | ~1.5 pages |
+| **5** | Person 5 | Apache Tools Benchmark | ✅✅ Spark/Hive/Pig | Tool Implementation, Raw Metrics, Code | Depends on P4 ⏳ | ~1.5-2 pages |
+| **6** | Person 6 | Dashboard & BI | ✅ Looker Studio | Business Insights, Dashboard Screenshots | Depends on P4 ONLY ✅ | ~1.5-2 pages |
+| **7** | Person 7 | Results Analysis | ✅ Analysis & Charts | Benchmark Comparison, Performance Analysis, Tool Matrix | Depends on P5 ⏳ | ~2 pages |
+| **8** | Person 8 | Conclusion | ❌ None | Executive Summary, Key Findings, Recommendations | All complete ⏳ | ~1 page |
+
+**Total Report:** 10 pages (excluding front matter & references)
+
+### Dependency Flow Chart
+```
+Person 1 (Independent)
+Person 2 (Independent)
+Person 3 (Independent) → Bronze CSV
+    ↓
+    Person 4 (Data Cleaning) → Silver CSV
+         ├─ Person 5 (Benchmarking) → Metrics/Logs (LOCAL ONLY)
+         │    └─ Person 7 (Analysis) → Performance Comparison
+         │
+         └─ Person 6 (Dashboard) → Looker Studio (INDEPENDENT FROM P5 ✅)
+         
+Person 8 (Conclusion - waits for all)
+```
+
+**Key Advantage:** Person 5 & Person 6 are PARALLEL
+- If Person 5 is delayed, Person 6 is NOT affected ✅
+- Person 6 reads Silver bucket directly
+- Person 6 can optionally load to BigQuery independently
 
 ---
 
 ## GCP Infrastructure Setup
 
-### Enable Required APIs
+### Step 1: Enable Required APIs
 ```bash
 gcloud services enable storage.googleapis.com \
   secretmanager.googleapis.com \
   cloudfunctions.googleapis.com \
   cloudbuild.googleapis.com \
   run.googleapis.com \
+  dataproc.googleapis.com \
   logging.googleapis.com
 ```
 
-### Add local env variables
+### Step 2: Set Environment Variables
 ```bash
 export PROJECT_ID="bigdatamanagement-497302"
-export REGION="asia-southeast1" # Set to Singapore
+export REGION="asia-southeast1"
 export BRONZE_BUCKET="kaggle_bronze_bucket"
 export SILVER_BUCKET="kaggle_silver_bucket"
-export SA_NAME="921953242742-compute"
+export SA_NAME="bigdata-pipeline"
 export SERVICE_ACCOUNT_EMAIL="${SA_NAME}@developer.gserviceaccount.com"
 ```
 
-### Assign IAM Roles to Compute Service Account
+### Step 3: Create Service Account & Assign IAM Roles (Person 3's responsibility)
 ```bash
+# Create service account
+gcloud iam service-accounts create ${SA_NAME} \
+  --display-name="Big Data Pipeline Service Account"
+
+# Assign roles
 for ROLE in storage.admin secretmanager.secretAccessor dataproc.editor metastore.editor bigquery.admin; do \
   gcloud projects add-iam-policy-binding ${PROJECT_ID} \
     --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
@@ -134,187 +259,85 @@ done
 
 ## Execution & Deployment Guide
 
-### Phase 1: Ingestion — Kaggle → Cloud Run → Bronze GCS
+### Phase 1: Data Ingestion (Bronze Layer) — Person 3
 
-#### Secret Manager
-Store Kaggle API credentials (`kaggle.json`) in Secret Manager at the path:
-`projects/{PROJECT_ID}/secrets/kaggle-json/versions/latest`
+**Responsibility:** Set up IAM, deploy Cloud Run, validate ingestion
 
-1. Open CloudShell Editor mode by clicking "Open Editor"
+#### Secret Manager Setup
+Store Kaggle API credentials at: `projects/{PROJECT_ID}/secrets/kaggle-json/versions/latest`
 
-<p align="center">
-  <img src="src/images/CloudShell_openeditor_button.png" alt="CloudShell Open Editor button" width="600"/>
-</p>
-
-2. Add the ingestion python script and requirements.txt from (`src/ingestion/`) into the editor
-
-<p align="center">
-  <img src="src/images/CloudShell_editor.png" alt="CloudShell Editor" width="600"/>
-</p>
-
-3. Run the bash command below in the terminal:
-
+#### Cloud Run Deployment
 ```bash
-gcloud functions deploy ingestion_kaggle --runtime python310 --trigger-http --allow-unauthenticated --region ${REGION} --source ./cloudfunction_scripts --set-env-vars PROJECT_ID=${PROJECT_ID},BUCKET=${BUCKET} --timeout=540s --memory=1024MB
-```
-4. Test the function using the curl command provided in the Google Cloud UI:
-
-```bash
-curl -X POST "https://asia-southeast1-bigdatamanagement-497302.cloudfunctions.net/ingestion_kaggle" \
--H "Authorization: bearer $(gcloud auth print-identity-token)" \
--H "Content-Type: application/json" \
--d '{
-  "name": "Developer"
-}'
+gcloud functions deploy ingestion_kaggle \
+  --runtime python310 \
+  --trigger-http \
+  --allow-unauthenticated \
+  --region ${REGION} \
+  --set-env-vars PROJECT_ID=${PROJECT_ID},BRONZE_BUCKET=${BRONZE_BUCKET}
 ```
 
-What the Cloud Run Python app does (`src/ingestion/ingestion_cloudrun.py`):
-1. Retrieves Kaggle credentials from Secret Manager
-2. Downloads the TripAdvisor dataset via kagglehub
-3. Standardizes column names (lowercase, spaces/hyphens → underscores)
-4. Uploads the CSV to GCS Bronze layer (`gs://kaggle_bronze_bucket/bronze_tripadvisor.csv`)
-
-### Phase 2: Data Quality Processing — Bronze → Silver
-
-Open Cloud Dataprep (now Alteryx Trifacta) via the web console, load the raw file from the Bronze bucket, apply type-casting and cleaning recipes, and schedule the run to output the cleaned file into the **Silver layer** (`gs://kaggle_silver_bucket/tripadvisor_raw/`).
-
-### Phase 3: Distributed Compute Benchmarking
-
-#### Example that we can do (not tested in the code)
-
-- Daily Booking Patterns: "How many restaurants receive bookings daily?" (Group by restaurant, count distinct booking dates)
-- Most Popular Hotels/Restaurants: "Top 10 restaurants by review count and average rating"
-- Price Range Distribution: "What percentage of restaurants fall in each price range by location?"
-- Geographic Hotspots: "Which locations have the highest concentration of highly-rated restaurants?"
-- Rating vs. Popularity: "Correlation between review count and average rating"
-
-
-#### Example benchmark
-- Query-Level Comparisons:
-- Execution Time: How long did each tool (PySpark, Hive, Pig) take to run the aggregation query?
-- Memory Usage: Peak RAM consumed during processing
-
-
-### Steps
-
-Create a Dataproc cluster (via UI will be created by admin):
-**1. Basic Setup**
-Go to the Dataproc section in the Google Cloud Console.
-- Click CREATE CLUSTER and select Cluster on Compute Engine
-- Cluster Name: kaggle-cluster
-- Region: asia-southeast1
-- Zone: asia-southeast1-c
-- Cluster type (Cheapest): Select Single Node (1 master, 0 workers)
-
-**2. Versioning & Components**
-Scroll down to Versioning.
-- Image type: Select Ubuntu
-- Image version: Select 2.3.30-ubuntu22
-- Scroll down to Components -> Optional components
-- Check the boxes for: Jupyter, Zookeeper, Iceberg, and Pig
-
-**3. Hardware Configuration**
-Expand the Nodes or Machine configuration section.
-- Under Master node, click the Machine type dropdown
-- Select e2-highmem-4 (Cheapest)
-- (Optional) Adjust your primary disk size here if needed
-
-**4. Custom Staging Bucket**
-Expand the Customize cluster section.
-- Locate the Cloud Storage staging bucket field
-- Click Browse and select your dedicated bucket: `dataproc_staging_kaggle`
-
-**5. Cluster Properties (The YARN/Spark Fixes)**
-Still in the Customize cluster section, locate the Cluster properties block. You will click ADD PROPERTY four times to input your memory and timeout fixes.
-
-When adding these, set the Prefix to Custom, or select the specific prefix (like yarn or spark) if the UI forces a dropdown:
-
-Property 1 (Fixes the stuck AMs):
-- Prefix: yarn (or yarn-site)
-- Name: yarn.scheduler.capacity.maximum-am-resource-percent
-- Value: 0.8
-
-Property 2 (Enables resource sharing):
-- Prefix: spark (or spark-defaults)
-- Name: spark.dynamicAllocation.enabled
-- Value: true
-
-Property 3 (Kills idle kernels fast):
-- Prefix: spark (or spark-defaults)
-- Name: spark.dynamicAllocation.executorIdleTimeout
-- Value: 60s
-
-Property 4 (Clears cached memory fast):
-- Prefix: spark (or spark-defaults)
-- Name: spark.dynamicAllocation.cachedExecutorIdleTimeout
-- Value: 60s
-
-Once those are added, just hit the CREATE button at the bottom.
-
-1. Start the cluster, click the "Web Interface" and open JupyterLab based on the photo provided below
-2. Use the PySpark notebook to write and run PySpark code
-
-<p align="center">
-  <img src="src/images/Example_spark_output.png" alt="PySpark example output" width="600"/>
-</p>
-
-3. For Hive, run the code in the terminal:
-
-Step 1: Create and open the file using a text editor. Since you are in a terminal, the easiest built-in text editor to use is nano:
-
+#### Test Ingestion
 ```bash
-nano tripadvisor_benchmark.hql
+curl -X POST "https://${REGION}-${PROJECT_ID}.cloudfunctions.net/ingestion_kaggle" \
+  -H "Content-Type: application/json"
 ```
 
-Step 2: Paste your script. Your terminal will change into a basic text editor screen. Paste your entire Hive script inside. Check the code available in `src/ingestion/ingestion_cloudrun.py` and `dataproc_hive_example.hql`.
+**Output:** `gs://kaggle_bronze_bucket/bronze_tripadvisor.csv`
 
-Step 3: Save and Exit. To save the file in nano:
-1. Press Ctrl + O (the letter O, to "Write Out" or save)
-2. Press Enter to confirm the file name
-3. Press Ctrl + X to exit the editor and return to the normal command line
+---
 
-Step 4: Execute the file with a timer. Now that the file is permanently saved on your master node's hard drive, you can run it as many times as you want without opening it again. To run it and get your final benchmark time, paste this execution block:
+### Phase 2: Data Cleaning (Silver Layer) — Person 4
 
-```bash
-start_time=$(date +%s)
-hive -f tripadvisor_hive.hql
-end_time=$(date +%s)
-echo "--------------------------------------------------------"
-echo "PURE STANDALONE APACHE HIVE RUNTIME: $((end_time - start_time)) SECONDS"
-echo "--------------------------------------------------------"
-```
+**Responsibility:** Use Cloud Dataprep to clean data
 
-<p align="center">
-  <img src="src/images/Example_hive_output.png" alt="Hive example output" width="600"/>
-</p>
+#### Cloud Dataprep Workflow
+1. Create new flow in Cloud Dataprep
+2. Load Bronze CSV from GCS: `gs://kaggle_bronze_bucket/bronze_tripadvisor.csv`
+3. Apply recipes:
+   - **Recipe 1:** Remove duplicates
+   - **Recipe 2:** Remove/fill NULL values
+   - **Recipe 3:** Type casting (rating→FLOAT, review_count→INT)
+   - **Recipe 4:** Standardize column names (lowercase, underscores)
+4. Output to Silver: `gs://kaggle_silver_bucket/tripadvisor_clean.csv`
 
-4. For Pig, run the code in the terminal
+#### Validation
+- Record before/after metrics:
+  - Total rows: X → Y (Z% reduction)
+  - Duplicate rows: A → 0
+  - Null percentage: B% → C%
 
-Step 1: Create the Pig Script File
-In that same black SSH terminal window, use nano to create your new Pig file. Check the code in `dataproc_pig.pig`.
+**Output:** `gs://kaggle_silver_bucket/tripadvisor_clean.csv`
 
-Step 3: Save and Exit. Just like before:
-1. Press Ctrl + O (to save)
-2. Press Enter (to confirm)
-3. Press Ctrl + X (to exit)
+---
 
-Step 4: Execute and Time the Run
-Now, run the script using the native pig binary wrapper. Paste this block to get your final benchmark metric:
+### Phase 3: Distributed Compute Benchmarking (Compute Layer) — Person 5
 
-```bash
-start_time=$(date +%s)
-pig -useHCatalog tripadvisor_pig.pig
-end_time=$(date +%s)
-echo "--------------------------------------------------------"
-echo "PURE STANDALONE APACHE PIG RUNTIME: $((end_time - start_time)) SECONDS"
-echo "--------------------------------------------------------"
-```
+**CRITICAL CHANGE:** Person 5 benchmarks ONLY - NO BigQuery or GCS Gold writes
+- Record execution metrics locally
+- Save benchmark logs
+- Person 7 analyzes results separately
 
-<p align="center">
-  <img src="src/images/Example_pig_output.png" alt="Pig example output" width="600"/>
-</p>
+#### Create Dataproc Cluster (via GCP UI)
+1. **Basic Setup**
+   - Cluster Name: kaggle-cluster
+   - Region: asia-southeast1
+   - Cluster type: Single Node (1 master, 0 workers)
 
-The Spark, Hive and Pig scripts execute an identical aggregation:
+2. **Versioning & Components**
+   - Image version: 2.3.30-ubuntu22
+   - Optional components: Jupyter, Zookeeper, Iceberg, Pig
+
+3. **Hardware Configuration**
+   - Master node machine type: e2-highmem-4
+   - Primary disk size: 100 GB
+
+4. **Cluster Properties (YARN/Spark Fixes)**
+   - `yarn.scheduler.capacity.maximum-am-resource-percent: 0.8`
+   - `spark.dynamicAllocation.enabled: true`
+   - `spark.dynamicAllocation.executorIdleTimeout: 60s`
+   - `spark.dynamicAllocation.cachedExecutorIdleTimeout: 60s`
+
+#### Benchmark Query (Identical for All Three Tools)
 ```sql
 SELECT location, type, price_range, COUNT(name) as total_restaurants
 FROM tripadvisor_clean_table
@@ -324,31 +347,296 @@ ORDER BY total_restaurants DESC
 LIMIT 5;
 ```
 
-### Phase 4: BigQuery & Looker Studio — Gold Layer
+#### Apache Spark (PySpark) — Person 5
 
-Load the cleaned Silver data into BigQuery tables, then connect Looker Studio to build interactive dashboards for restaurant analytics.
+```python
+# src/compute/dataproc_spark.py
+import time
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, count
+
+spark = SparkSession.builder \
+    .appName("Tripadvisor-Benchmark-Spark") \
+    .config("spark.sql.warehouse.dir", "file:///tmp/spark-warehouse") \
+    .enableHiveSupport() \
+    .getOrCreate()
+
+start_spark = time.time()
+
+# Load Silver data
+df = spark.read.csv("gs://kaggle_silver_bucket/tripadvisor_clean.csv", 
+                    header=True, inferSchema=True)
+
+# Execute benchmark query
+result = df.filter(col("location").isNotNull()) \
+           .groupBy("location", "type", "price_range") \
+           .agg(count("name").alias("total_restaurants")) \
+           .sort(col("total_restaurants").desc()) \
+           .limit(5)
+
+result.show()
+
+# ONLY save locally for logging (no BigQuery/Gold writes)
+result.coalesce(1).write.mode("overwrite").csv("/tmp/spark_output")
+
+end_spark = time.time()
+spark_time = end_spark - start_spark
+
+print("=" * 60)
+print(f"SPARK EXECUTION TIME: {spark_time:.2f} seconds")
+print("=" * 60)
+
+spark.stop()
+```
+
+**Execution & Timing:**
+```bash
+start_time=$(date +%s)
+spark-submit src/compute/dataproc_spark.py > /tmp/spark_run1.log 2>&1
+end_time=$(date +%s)
+echo "Spark Runtime: $((end_time - start_time)) seconds" >> /tmp/spark_run1.log
+```
+
+#### Apache Hive (HiveQL) — Person 5
+
+```sql
+-- src/compute/dataproc_hive.hql
+CREATE EXTERNAL TABLE tripadvisor_clean_table (
+    name STRING,
+    location STRING,
+    type STRING,
+    price_range STRING,
+    rating FLOAT,
+    review_count INT
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+LOCATION 'gs://kaggle_silver_bucket/tripadvisor_clean/';
+
+SELECT location, type, price_range, COUNT(name) as total_restaurants
+FROM tripadvisor_clean_table
+WHERE location IS NOT NULL AND location != 'location'
+GROUP BY location, type, price_range
+ORDER BY total_restaurants DESC
+LIMIT 5;
+```
+
+**Execution & Timing:**
+```bash
+start_time=$(date +%s)
+hive -f src/compute/dataproc_hive.hql > /tmp/hive_run1.log 2>&1
+end_time=$(date +%s)
+echo "PURE STANDALONE APACHE HIVE RUNTIME: $((end_time - start_time)) SECONDS" >> /tmp/hive_run1.log
+```
+
+#### Apache Pig (Pig Latin) — Person 5
+
+```pig
+-- src/compute/dataproc_pig.pig
+tripadvisor = LOAD 'gs://kaggle_silver_bucket/tripadvisor_clean.csv' 
+              USING PigStorage(',') AS 
+              (name, location, type, price_range, rating, review_count);
+
+filtered = FILTER tripadvisor BY location IS NOT NULL AND location != 'location';
+
+grouped = GROUP filtered BY (location, type, price_range);
+
+counted = FOREACH grouped GENERATE 
+          group.location as location,
+          group.type as type,
+          group.price_range as price_range,
+          COUNT(filtered) as total_restaurants;
+
+sorted = ORDER counted BY total_restaurants DESC;
+
+limited = LIMIT sorted 5;
+
+STORE limited INTO '/tmp/pig_output';
+```
+
+**Execution & Timing:**
+```bash
+start_time=$(date +%s)
+pig -useHCatalog src/compute/dataproc_pig.pig > /tmp/pig_run1.log 2>&1
+end_time=$(date +%s)
+echo "PURE STANDALONE APACHE PIG RUNTIME: $((end_time - start_time)) SECONDS" >> /tmp/pig_run1.log
+```
+
+**Important:** All three tools' results saved as LOCAL LOGS ONLY (in `/tmp/`)
 
 ---
 
-## Recorded Performance Benchmarks & Results
-*(Populated during production testing phase)*
+### Phase 4: Business Intelligence Dashboard — Person 6 (INDEPENDENT)
 
-| Experiment Run Target | Spark (PySpark) | Hive (Tez) | Pig (MapReduce) |
-|---|---|---|---|
-| Test Query: Aggregation + Group By + Order By | X.XX seconds | Y.YY seconds | Z.ZZ seconds |
+**Responsibility:** Build dashboard from Silver layer data (does NOT depend on Person 5)
 
-### Key Findings for Documentation (Expected)
-- **Spark Strategy Acceleration:** Spark's in-memory Directed Acyclic Graph (DAG) optimization bypassed structural metadata lookups, executing calculations significantly faster than the Hive and Pig models.
-- **Hive Strategy Overhead:** Hive external tables reading directly from GCS via the embedded Derby metastore introduced serialization overhead from Tez container initialization and metadata lookups, resulting in higher execution times compared to Spark's in-memory processing.
-- **Pig Strategy Characteristics:** Pig's dataflow scripting model compiled to MapReduce incurred additional serialization overhead between each processing step, making it the slowest of the three engines for this aggregation workload.
+#### Option A: Connect Looker Studio Directly to GCS (Recommended - Fastest)
+1. Create Looker Studio data source → GCS CSV
+2. Point to: `gs://kaggle_silver_bucket/tripadvisor_clean.csv`
+3. Build visualizations directly
+
+#### Option B: Load Silver to BigQuery First (More Scalable)
+```bash
+bq load --autodetect --source_format=CSV \
+  restaurant_gold_db.restaurants \
+  'gs://kaggle_silver_bucket/tripadvisor_clean.csv'
+```
+
+#### Dashboard 1: Restaurant Analytics
+- Top 10 restaurants by location & price range
+- Rating distribution (histogram)
+- Review count distribution
+- Geographic heatmap
+
+#### Dashboard 2: Booking Patterns
+- Daily booking volume by location
+- Price range distribution (pie chart)
+- Cuisine type popularity
+- Most popular restaurants (top 20)
+
+**Business Questions Answered:**
+- How many people book daily by location?
+- What's the most famous restaurant (top ratings + reviews)?
+- What price ranges are preferred?
+- Which locations have highest concentration of highly-rated restaurants?
 
 ---
 
-## Project Contribution Matrix (Might be like this)
-To simplify evaluation, roles are divided evenly among team members:
+### Phase 5: Performance Analysis & Results — Person 7
 
-- **Group Leader:** Infrastructure coordination, Dataproc cluster setup, and documentation assembly.
-- **Data Ingestion Engineers:** Managed Cloud Run API development, Kaggle integration via Secret Manager, and standardized the Bronze layer landing logic.
-- **Data Quality Engineers:** Authored the data verification recipes in Dataprep for Bronze → Silver transformation.
-- **Data Platform Engineers (Spark/Hive/Pig):** Programmed scripts using PySpark, HiveQL, and Pig Latin, managed the Dataproc cluster, and executed benchmarking metrics.
-- **BI Visualizers:** Built out final BigQuery data tables and structured the interactive dashboards in Looker Studio.
+**Responsibility:** Extract metrics from Person 5's logs and create comparison analysis
+
+#### Compile Benchmark Data
+Extract from Person 5's local logs:
+- Spark Run 1: X.XX sec, Run 2: X.YY sec, Run 3: X.ZZ sec
+- Hive Run 1: A.AA sec, Run 2: A.BB sec, Run 3: A.CC sec
+- Pig Run 1: P.PP sec, Run 2: P.QQ sec, Run 3: P.RR sec
+
+#### Calculate Metrics
+```
+Average execution time per tool
+Standard deviation
+Throughput (rows per second)
+Memory usage (if captured)
+```
+
+#### Performance Comparison Results
+
+| Tool | Avg Execution Time | Memory Profile | Throughput | Best For |
+|------|-------------------|----------------|-----------|----------|
+| **Spark** | X.XX sec | Y MB | Z rows/sec | Real-time analytics, iterative ML |
+| **Hive** | A.AA sec | B MB | C rows/sec | Data warehouse, complex joins |
+| **Pig** | P.PP sec | Q MB | R rows/sec | Complex ETL pipelines |
+
+#### Tool Selection Matrix
+| Criteria | Spark | Hive | Pig |
+|----------|-------|------|-----|
+| Speed | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
+| SQL Familiarity | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ |
+| Memory Efficiency | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| Ease of Learning | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+
+#### Key Findings (Expected)
+- **Spark Advantage:** DAG optimization, in-memory processing → fastest
+- **Hive Trade-off:** Metastore overhead but SQL-friendly for teams
+- **Pig Characteristic:** MapReduce model with disk I/O → slowest but flexible for complex ETL
+
+---
+
+## Report Structure (10 Pages Total)
+
+| Page # | Content | Author |
+|--------|---------|--------|
+| 1 | Abstract + Keywords | Person 1 |
+| 2 | Introduction | Person 1 |
+| 2.5 | Problem Statements | Person 1 |
+| 3 | Architecture & Framework | Person 2 |
+| 4-5 | IAM & Ingestion (Bronze) | Person 3 |
+| 5.5-6 | Data Cleaning (Silver) | Person 4 |
+| 6.5-7 | Apache Tools Implementation & Code | Person 5 |
+| 7.5-8 | Raw Benchmark Results | Person 5 |
+| 8.5-9 | Dashboard & Business Insights | Person 6 |
+| 9-10 | Performance Comparison & Tool Analysis | Person 7 |
+| 10+ | Conclusion & Recommendations | Person 8 |
+
+---
+
+## Presentation Slide Allocation (10 Slides Max)
+
+| # | Slide | Speaker | Duration |
+|---|-------|---------|----------|
+| 1 | Title Slide | Person 1 | 15 sec |
+| 2 | Problem Statements | Person 1 | 30 sec |
+| 3 | Architecture Diagram | Person 2 | 45 sec |
+| 4 | IAM & Ingestion Flow | Person 3 | 1 min |
+| 5 | Data Cleaning Results | Person 4 | 1 min |
+| 6 | Apache Tools Code | Person 5 | 1.5 min |
+| 7 | Dashboard Screenshots | Person 6 | 1 min |
+| 8 | Benchmark Results Chart | Person 7 | 1 min |
+| 9 | Tool Selection Matrix | Person 7 | 1 min |
+| 10 | Conclusion & Recommendations | Person 8 | 1 min |
+| | **TOTAL** | | **~10 min** |
+
+---
+
+## Key Differences from Original README
+
+### ✅ UPDATED:
+
+1. **Gold Layer Handling**
+   - ❌ OLD: "Spark/Hive/Pig write to BigQuery/Gold"
+   - ✅ NEW: "Person 5 benchmarks locally only, no writes"
+
+2. **Dashboard Independence**
+   - ❌ OLD: "Dashboard depends on Apache tools results"
+   - ✅ NEW: "Person 6 reads Silver directly, independent from Person 5"
+
+3. **Team Roles**
+   - ❌ OLD: Generic roles (Group Leader, Data Ingestion Engineers, etc.)
+   - ✅ NEW: 8 specific people with clear deliverables
+
+4. **Architecture Diagram**
+   - ❌ OLD: Shows results flowing to Gold/BigQuery
+   - ✅ NEW: Shows benchmarks saved locally, dashboard independent path
+
+5. **Phase 3 & 4 Descriptions**
+   - ❌ OLD: Vague about who does what
+   - ✅ NEW: Crystal clear: Person 5 benchmarks, Person 6 dashboard, Person 7 analysis
+
+6. **Dependency Flow**
+   - ❌ OLD: Linear 1→2→3→4
+   - ✅ NEW: Parallel paths (P5 & P6 independent at step 4)
+
+---
+
+## Running the Project End-to-End
+
+### Timeline
+1. **Week 1-2:** Persons 1, 2 work (independent)
+2. **Week 2-3:** Person 3 deploys ingestion
+3. **Week 3-4:** Person 4 cleans data
+4. **Week 4-5:** Persons 5 & 6 work in **PARALLEL**
+   - P5: Runs Spark, Hive, Pig benchmarks
+   - P6: Builds Looker Studio dashboard
+5. **Week 5:** Person 7 analyzes results
+6. **Week 6:** Person 8 writes conclusion + final assembly
+
+### No Blocking!
+- If Person 5 delays → Only Person 7 waits, NOT Person 6 ✅
+- Each person knows exactly when to start and what they need
+
+---
+
+## References & Additional Resources
+
+- **Apache Spark Documentation:** https://spark.apache.org/docs/
+- **Apache Hive Documentation:** https://hive.apache.org/
+- **Apache Pig Documentation:** https://pig.apache.org/
+- **Google Cloud Dataproc:** https://cloud.google.com/dataproc/docs
+- **Google Cloud Storage:** https://cloud.google.com/storage/docs
+- **Looker Studio:** https://support.google.com/looker-studio
+- **TripAdvisor Dataset:** https://www.kaggle.com/datasets/
+
+---
+
+**For detailed team member responsibilities, see:** [TEAM_ALLOCATION.md](TEAM_ALLOCATION.md)
