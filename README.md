@@ -530,44 +530,12 @@ Memory usage (if captured)
 
 ---
 
-## Key Differences from Original README
-
-### ✅ UPDATED:
-
-1. **Gold Layer Handling**
-   - ❌ OLD: "Spark/Hive/Pig write to BigQuery/Gold"
-   - ✅ NEW: "Person 5 benchmarks locally only, no writes"
-
-2. **Dashboard Independence**
-   - ❌ OLD: "Dashboard depends on Apache tools results"
-   - ✅ NEW: "Person 6 reads Silver directly, independent from Person 5"
-
-3. **Team Roles**
-   - ❌ OLD: Generic roles (Group Leader, Data Ingestion Engineers, etc.)
-   - ✅ NEW: 8 specific people with clear deliverables
-
-4. **Architecture Diagram**
-   - ❌ OLD: Shows results flowing to Gold/BigQuery
-   - ✅ NEW: Shows benchmarks saved locally, dashboard independent path
-
-5. **Phase 3 & 4 Descriptions**
-   - ❌ OLD: Vague about who does what
-   - ✅ NEW: Crystal clear: Person 5 benchmarks, Person 6 dashboard, Person 7 analysis
-
-6. **Dependency Flow**
-   - ❌ OLD: Linear 1→2→3→4
-   - ✅ NEW: Parallel paths (P5 & P6 independent at step 4)
-
----
 
 ## Running the Project End-to-End
 
 ### Timeline
 1. we only have 2 weeks...
 
-### No Blocking!
-- If Person 5 delays → Only Person 7 waits, NOT Person 6 ✅
-- Each person knows exactly when to start and what they need
 
 
 
