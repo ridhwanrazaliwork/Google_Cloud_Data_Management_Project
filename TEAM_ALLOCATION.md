@@ -589,13 +589,6 @@ END
 
 ## **Timeline**
 
-**Week 1-2:** Persons 1, 2 work independently
-**Week 2-3:** Person 3 (IAM + Ingestion)
-**Week 3-4:** Person 4 (Data Cleaning)
-**Week 4-5:** Persons 5 & 6 start in PARALLEL (independent of each other)
-- Person 5: Benchmarking only
-- Person 6: Dashboard from Silver bucket
-**Week 5-6:** Person 7 (Results, waits on P5)
-**Week 6:** Person 8 (Conclusion)
+2 Weeks, to be discusseed
 
 **Person 6 is no longer blocked by Person 5** ✅
