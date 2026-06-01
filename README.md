@@ -21,38 +21,28 @@ flowchart TB
     subgraph BRONZE["BRONZE LAYER (Raw) — Step 1: Ingestion"]
         A["Cloud Run<br/>Python Flask App"] -->|"Kaggle API request"| B["Kaggle Dataset<br/>TripAdvisor Restaurant"]
         B -->|"streams raw CSV"| C["GCS Bronze Bucket<br/>gs://kaggle_bronze/<br/>bronze_tripadvisor.csv"]
-        A --> C
     end
 
     subgraph SILVER["SILVER LAYER (Cleaned) — Step 2: Quality Engineering"]
-        C -->|"dual paths"| D{"Choose<br/>engineering<br/>approach"}
-        D -->|"Path A: No-Code (Easier approach)"| E["Cloud DataPrep<br/>Deduplication · Null Removal<br/>Structural Splitting"]
-        D -->|"Path B: Code-First"| F["PySpark +<br/>Great Expectations<br/>Programmatic Validation"]
+        C -->|"No-Code (Easier approach)"| E["Cloud DataPrep<br/>Deduplication · Null Removal<br/>Structural Splitting"]
         E --> G["GCS Silver Bucket<br/>gs://kaggle_silver/<br/>tripadvisor_raw/"]
-        F --> G
     end
 
-    subgraph GOLD["GOLD LAYER (Curated) — Step 3: Distributed Metric Engineering"]
-        G --> H["Dataproc Cluster<br/>e2-highmem-4 · 4 vCPU · 32 GB RAM<br/>Hive External Table → GCS"]
+    subgraph BENCHMARK["BENCHMARK LAYER (Curated) — Step 3: Distributed Metric Engineering"]
+        G --> H["Dataproc Cluster<br/>e2-highmem-4 · 4 vCPU · 16 GB RAM<br/>Hive External Table → GCS"]
         
         H --> I["PySpark<br/>In-Memory DAG<br/>Aggregation"]
         H --> J["Apache Hive<br/>(Tez Engine)<br/>Declarative SQL"]
-        H --> K["Apache Pig<br/>(MapReduce)<br/>Procedural Dataflow"]
-        
-        I -->|"native write"| L["BigQuery Gold Layer<br/>restaurant_gold_db"]
-        J -->|"native write"| L
-        K -->|"writes to GCS"| M["GCS Gold Partition"]
-        M -->|"bq load CLI"| L
     end
 
     subgraph BI["DOWNSTREAM CONSUMPTION — Step 4: Business Intelligence"]
-        L --> N["Looker Studio<br/>Interactive Dashboards"]
+        G --> N["Looker Studio<br/>Interactive Dashboards"]
         
     end
 
     style BRONZE fill:#e8d5b7,stroke:#b8860b,color:#000
     style SILVER fill:#d0d0d0,stroke:#708090,color:#000
-    style GOLD fill:#ffd700,stroke:#b8860b,color:#000
+    style BENCHMARK fill:#ffd700,stroke:#b8860b,color:#000
     style BI fill:#98fb98,stroke:#228b22,color:#000
 ```
 
@@ -74,7 +64,7 @@ flowchart TB
 - **Storage Landing Zone:** Google Cloud Storage (GCS) Buckets (`kaggle_bronze_bucket`, `kaggle_silver_bucket`, `kaggle_gold_bucket`)
 - **Data Quality Automation:** Cloud Dataprep by Trifacta (Alteryx)
 - **Distributed Processing:** GCP Dataproc Cluster (Managed Apache Spark) (e2-highmem-4, 4 vCPU, 16 GB RAM) — Hive external tables read directly from GCS
-- **Compute Engines Benchmarked:** Apache Spark (PySpark) · Apache Hive (Tez) · Apache Pig (MapReduce)
+- **Compute Engines Benchmarked:** Apache Spark (PySpark) · Apache Hive (Tez)
 - **Enterprise Warehouse:** Google BigQuery
 - **Business Intelligence Dashboard:** Looker Studio (Data Studio)
 - **Secrets Management:** Google Cloud Secret Manager (Kaggle API credentials)
@@ -216,7 +206,7 @@ Scroll down to Versioning.
 **3. Hardware Configuration**
 Expand the Nodes or Machine configuration section.
 - Under Master node, click the Machine type dropdown
-- Select e2-highmem-4 (Cheapest)
+- Select e2-highmem-4 (Cheapest for 32gb memory) or choose other cheap 16gb memory cluster
 - (Optional) Adjust your primary disk size here if needed
 
 **4. Custom Staging Bucket**
@@ -288,41 +278,6 @@ echo "--------------------------------------------------------"
   <img src="src/images/Example_hive_output.png" alt="Hive example output" width="600"/>
 </p>
 
-4. For Pig, run the code in the terminal
-
-Step 1: Create the Pig Script File
-In that same black SSH terminal window, use nano to create your new Pig file. Check the code in `dataproc_pig.pig`.
-
-Step 3: Save and Exit. Just like before:
-1. Press Ctrl + O (to save)
-2. Press Enter (to confirm)
-3. Press Ctrl + X (to exit)
-
-Step 4: Execute and Time the Run
-Now, run the script using the native pig binary wrapper. Paste this block to get your final benchmark metric:
-
-```bash
-start_time=$(date +%s)
-pig -useHCatalog tripadvisor_pig.pig
-end_time=$(date +%s)
-echo "--------------------------------------------------------"
-echo "PURE STANDALONE APACHE PIG RUNTIME: $((end_time - start_time)) SECONDS"
-echo "--------------------------------------------------------"
-```
-
-<p align="center">
-  <img src="src/images/Example_pig_output.png" alt="Pig example output" width="600"/>
-</p>
-
-The Spark, Hive and Pig scripts execute an identical aggregation:
-```sql
-SELECT location, type, price_range, COUNT(name) as total_restaurants
-FROM tripadvisor_clean_table
-WHERE location IS NOT NULL AND location != 'location'
-GROUP BY location, type, price_range
-ORDER BY total_restaurants DESC
-LIMIT 5;
-```
 
 ### Phase 4: BigQuery & Looker Studio — Gold Layer
 
@@ -340,15 +295,6 @@ Load the cleaned Silver data into BigQuery tables, then connect Looker Studio to
 ### Key Findings for Documentation (Expected)
 - **Spark Strategy Acceleration:** Spark's in-memory Directed Acyclic Graph (DAG) optimization bypassed structural metadata lookups, executing calculations significantly faster than the Hive and Pig models.
 - **Hive Strategy Overhead:** Hive external tables reading directly from GCS via the embedded Derby metastore introduced serialization overhead from Tez container initialization and metadata lookups, resulting in higher execution times compared to Spark's in-memory processing.
-- **Pig Strategy Characteristics:** Pig's dataflow scripting model compiled to MapReduce incurred additional serialization overhead between each processing step, making it the slowest of the three engines for this aggregation workload.
+
 
 ---
-
-## Project Contribution Matrix
-To simplify evaluation, roles are divided evenly among team members:
-
-- **Group Leader:** Infrastructure coordination, Dataproc cluster setup, and documentation assembly.
-- **Data Ingestion Engineers:** Managed Cloud Run API development, Kaggle integration via Secret Manager, and standardized the Bronze layer landing logic.
-- **Data Quality Engineers:** Authored the data verification recipes in Dataprep for Bronze → Silver transformation.
-- **Data Platform Engineers (Spark/Hive/Pig):** Programmed scripts using PySpark, HiveQL, and Pig Latin, managed the Dataproc cluster, and executed benchmarking metrics.
-- **BI Visualizers:** Built out final BigQuery data tables and structured the interactive dashboards in Looker Studio.
