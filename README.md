@@ -91,6 +91,22 @@ flowchart TB
 
 ## GCP Infrastructure Setup
 
+### Login & Select Project
+
+After logging into Google Cloud Console, ensure you are in the correct project:
+
+1. Click the project dropdown at the top of the page
+
+<p align="center">
+  <img src="src/images/Click projects.png" alt="Click project dropdown" width="600"/>
+</p>
+
+2. Click **All** and select **bigdatamanagement**
+
+<p align="center">
+  <img src="src/images/Click All and choose bigdatamanagement.png" alt="Select bigdatamanagement project" width="600"/>
+</p>
+
 ### Enable Required APIs
 ```bash
 gcloud services enable storage.googleapis.com \
