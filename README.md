@@ -145,7 +145,7 @@ Store Kaggle API credentials (`kaggle.json`) in Secret Manager at the path:
 3. Run the bash command below in the terminal:
 
 ```bash
-gcloud functions deploy ingestion_kaggle --runtime python310 --trigger-http --allow-unauthenticated --region ${REGION} --source ./cloudfunction_scripts --set-env-vars PROJECT_ID=${PROJECT_ID},BUCKET=${BUCKET} --timeout=540s --memory=1024MB
+gcloud functions deploy ingestion_kaggle --runtime python310 --trigger-http --allow-unauthenticated --region ${REGION} --source ./cloudfunction_scripts --set-env-vars PROJECT_ID=${PROJECT_ID},BRONZE_BUCKET=${BRONZE_BUCKET} --timeout=540s --memory=1024MB
 ```
 4. Test the function using the curl command provided in the Google Cloud UI:
 

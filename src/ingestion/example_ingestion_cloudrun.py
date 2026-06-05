@@ -48,50 +48,43 @@ def ingestion_kaggle(request=None):
         load_kaggle_credentials()
         logger.info("Kaggle credentials loaded successfully from Secret Manager")
 
-        logger.info("Downloading dataset via kagglehub...")
+        logger.info("Downloading TripAdvisor dataset via kagglehub...")
         download_path = kagglehub.dataset_download(
-            "datafiniti/hotel-reviews"
+            "siddharthmandgi/tripadvisor-restaurant-recommendation-data-usa"
         )
         logger.info(f"Dataset downloaded successfully to: {download_path}")
 
-        target_file = "Datafiniti_Hotel_Reviews_Jun19.csv"
-        local_csv_path = os.path.join(download_path, target_file)
-
-        if not os.path.exists(local_csv_path):
-            raise FileNotFoundError(
-                f"Target file '{target_file}' not found in {download_path}. "
-                f"Available files: {[f for f in os.listdir(download_path) if f.endswith('.csv')]}"
-            )
-
-        logger.info(f"Target CSV file found: {local_csv_path}")      
+        csv_files = [f for f in os.listdir(download_path) if f.endswith(".csv")]
+        if not csv_files:
+            raise FileNotFoundError(f"No CSV files found in {download_path}")
+        csv_file = csv_files[0]
+        local_csv_path = os.path.join(download_path, csv_file)
+        logger.info(f"Found CSV file: {local_csv_path}")
 
         df = pd.read_csv(local_csv_path)
         logger.info(f"Loaded CSV into DataFrame — Shape: {df.shape}, Columns: {list(df.columns)}")
 
         logger.info("Standardizing column names (lowercase, spaces/hyphens to underscores)...")
         original_cols = list(df.columns)
-        df.columns = [col.lower().replace(" ", "_").replace("-", "_").replace(".", "_") for col in df.columns]
-        logger.info(f"Column rename complete — {len(original_cols)} columns processed")\
-        # Take only the first date from comma-separated lists in reviews_dateseen
-        if "reviews_dateseen" in df.columns:
-            df["reviews_dateseen"] = df["reviews_dateseen"].str.split(",").str[0]
+        df.columns = [col.lower().replace(" ", "_").replace("-", "_") for col in df.columns]
+        logger.info(f"Column rename complete — {len(original_cols)} columns processed")
 
-        modified_local_path = "/tmp/kaggle_bronze.csv"
+        modified_local_path = "/tmp/bronze_tripadvisor.csv"
         df.to_csv(modified_local_path, index=False)
         logger.info(f"Standardized dataset saved locally to: {modified_local_path}")
 
         logger.info(f"Uploading to GCS Bronze layer — bucket: {bronze_bucket}")
         storage_client = storage.Client()
         bucket = storage_client.bucket(bronze_bucket)
-        blob = bucket.blob("raw/kaggle_bronze.csv")
+        blob = bucket.blob("bronze_tripadvisor.csv")
         blob.upload_from_filename(modified_local_path)
-        logger.info(f"Upload complete — gs://{bronze_bucket}/raw/kaggle_bronze.csv")
+        logger.info(f"Upload complete — gs://{bronze_bucket}/tripadvisor_raw/bronze_tripadvisor.csv")
 
         logger.info("Ingestion pipeline completed successfully")
         return jsonify({
             "status": "success",
             "layer": "Bronze Landing",
-            "destination": f"gs://{bronze_bucket}/raw/kaggle_bronze.csv",
+            "destination": f"gs://{bronze_bucket}/bronze_tripadvisor.csv",
             "row_count": int(df.shape[0]),
             "column_count": int(df.shape[1]),
         }), 200
