@@ -1,5 +1,7 @@
 # Big Data Analytics Pipeline: Performance Benchmarking with Apache Spark and Apache Hive on Datafiniti Hotel Reviews
 
+> *This project would not have been possible without the hard work and dedication of my incredible team members — Azmal Mukhsin, Amir Shafiq, Hisyam Abdullah, Ahsan Habib, Moy Jia Qin, Liu Yi Qian, and Muhammad Shahir. Thank you for making this happen.*
+
 ---
 
 ## Project Overview & Domain
