@@ -1,6 +1,20 @@
 # Big Data Analytics Pipeline: Performance Benchmarking with Apache Spark and Apache Hive on Datafiniti Hotel Reviews
 
-> *This project would not have been possible without the hard work and dedication of my incredible team members — Azmal Mukhsin, Amir Shafiq, Hisyam Abdullah, Ahsan Habib, Moy Jia Qin, Liu Yi Qian, and Muhammad Shahir. Thank you for making this happen.*
+> *This project would not have been possible without the collaborative effort, hard work, and dedication of our project team: Ridhwan Razali (Project Lead), Azmal Mukhsin, Amir Shafiq, Hisyam Abdullah, Ahsan Habib, Moy Jia Qin, Liu Yi Qian, and Muhammad Shahir. Thank you all for making this happen.*
+
+## Project Team & Contributions
+
+| Name | Project Role | Primary Focus Areas |
+| :--- | :--- | :--- |
+| **Ridhwan Razali** | Project Lead / Data Engineer | End-to-end pipeline architecture, Cloud Run ingestion logic |
+| **Azmal Mukhsin** | Big Data Engineer | Dataproc cluster configuration, PySpark optimization |
+| **Amir Shafiq** | Data Analyst | Data Quality Engineering, Dataproc Jupyter notebooks |
+| **Hisyam Abdullah** | Warehousing Specialist | Apache Hive (Tez) external tables setup & schema mapping |
+| **Ahsan Habib** | Performance Analyst | Benchmarking execution tracks, metric collections |
+| **Moy Jia Qin** | BI Engineer | Looker Studio dashboards & metric visualizations |
+| **Liu Yi Qian** | QA Engineer | Data validation, missing values & deduplication logic verification |
+| **Muhammad Shahir**| Technical Writer | Documentation, reference aggregation & final report structuring |
+
 
 ---
 
